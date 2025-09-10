@@ -8,66 +8,6 @@ class ApplicationScanner: ObservableObject {
     @Published var isScanning = false
     @Published var scanProgress: Double = 0.0
     
-    private let supportedApplications: [String: [String: [DirectoryType]]] = [
-        // Adobe Creative Suite
-        "com.adobe.AfterEffects": [
-            "Effects": [.effects],
-            "Presets": [.presets],
-            "Templates": [.templates],
-            "Scripts": [.scripts]
-        ],
-        "com.adobe.Photoshop": [
-            "Plugins": [.plugins],
-            "Presets": [.presets],
-            "Scripts": [.scripts],
-            "Assets": [.assets]
-        ],
-        "com.adobe.Illustrator": [
-            "Plugins": [.plugins],
-            "Scripts": [.scripts],
-            "Assets": [.assets]
-        ],
-        "com.adobe.Premiere Pro": [
-            "Effects": [.effects],
-            "Presets": [.presets],
-            "Templates": [.templates]
-        ],
-        
-        // Apple Applications
-        "com.apple.FinalCutPro": [
-            "Effects": [.effects],
-            "Titles": [.templates],
-            "Transitions": [.effects],
-            "Generators": [.effects]
-        ],
-        "com.apple.motionapp": [
-            "Templates": [.templates],
-            "Effects": [.effects]
-        ],
-        
-        // 3D Applications
-        "com.maxon.cinema4d": [
-            "Plugins": [.plugins],
-            "Assets": [.assets],
-            "Materials": [.assets]
-        ],
-        "com.autodesk.maya": [
-            "Scripts": [.scripts],
-            "Plugins": [.plugins],
-            "Assets": [.assets]
-        ],
-        
-        // Audio Applications
-        "com.apple.logic10": [
-            "Plugins": [.plugins],
-            "Samples": [.assets],
-            "EXS24 Instruments": [.assets]
-        ],
-        "com.avid.ProTools": [
-            "Plugins": [.plugins],
-            "Sessions": [.other]
-        ]
-    ]
     
     private init() {}
     
@@ -97,7 +37,7 @@ class ApplicationScanner: ObservableObject {
                 }
                 
                 if let bundleIdentifier = getBundleIdentifier(for: appURL),
-                   supportedApplications.keys.contains(bundleIdentifier) {
+                   ApplicationDirectoryConfiguration.getSupportedApplications().contains(bundleIdentifier) {
                     
                     let appName = appURL.deletingPathExtension().lastPathComponent
                     let application = await createApplication(
@@ -132,7 +72,7 @@ class ApplicationScanner: ObservableObject {
     private func createApplication(name: String, bundleIdentifier: String, appURL: URL) async -> Application {
         var directories: [AppDirectory] = []
         
-        guard let directoryConfig = supportedApplications[bundleIdentifier] else {
+        guard let directoryConfig = ApplicationDirectoryConfiguration.getDirectoryConfiguration(for: bundleIdentifier) else {
             return Application(name: name, bundleIdentifier: bundleIdentifier, directories: [])
         }
         
@@ -221,6 +161,6 @@ class ApplicationScanner: ObservableObject {
     }
     
     func getSupportedApplications() -> [String] {
-        return Array(supportedApplications.keys)
+        return ApplicationDirectoryConfiguration.getSupportedApplications()
     }
 }

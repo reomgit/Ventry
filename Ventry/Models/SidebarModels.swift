@@ -3,12 +3,13 @@ import SwiftUI
 
 // MARK: - Starred Items
 struct StarredItem: Identifiable, Codable {
-    let id = UUID()
+    let id: UUID
     let name: String
     let type: StarredItemType
     let path: String?
     
     init(name: String, type: StarredItemType, path: String? = nil) {
+        self.id = UUID()
         self.name = name
         self.type = type
         self.path = path
@@ -34,13 +35,14 @@ enum StarredItemType: String, CaseIterable, Codable {
 
 // MARK: - Applications
 struct Application: Identifiable, Codable, Equatable {
-    let id = UUID()
+    let id: UUID
     let name: String
     let bundleIdentifier: String
     let iconName: String?
     var directories: [AppDirectory]
     
     init(name: String, bundleIdentifier: String, iconName: String? = nil, directories: [AppDirectory] = []) {
+        self.id = UUID()
         self.name = name
         self.bundleIdentifier = bundleIdentifier
         self.iconName = iconName
@@ -61,12 +63,13 @@ struct Application: Identifiable, Codable, Equatable {
 }
 
 struct AppDirectory: Identifiable, Codable {
-    let id = UUID()
+    let id: UUID
     let name: String
     let path: String
     let type: DirectoryType
     
     init(name: String, path: String, type: DirectoryType) {
+        self.id = UUID()
         self.name = name
         self.path = path
         self.type = type
@@ -104,12 +107,13 @@ enum DirectoryType: String, CaseIterable, Codable {
 
 // MARK: - User Tags
 struct UserTag: Identifiable, Codable {
-    let id = UUID()
+    let id: UUID
     let name: String
     let color: TagColor
     var itemCount: Int
     
     init(name: String, color: TagColor, itemCount: Int = 0) {
+        self.id = UUID()
         self.name = name
         self.color = color
         self.itemCount = itemCount

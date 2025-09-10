@@ -15,7 +15,7 @@ class ApplicationManager: ObservableObject {
     }
     
     func initializeApplications() async {
-        let scannedApplications = await scanner.scanForApplications()
+        _ = await scanner.scanForApplications()
         
         await MainActor.run {
             // This will be set on AppState through the app initialization

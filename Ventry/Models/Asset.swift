@@ -1,11 +1,12 @@
 import Foundation
 
 struct Asset: Identifiable, Codable {
-    let id = UUID()
+    let id: UUID
     let name: String
     let type: AssetType
     
     init(name: String, type: AssetType) {
+        self.id = UUID()
         self.name = name
         self.type = type
     }
