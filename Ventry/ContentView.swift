@@ -8,17 +8,36 @@
 import SwiftUI
 
 struct ContentView: View {
+    @EnvironmentObject var appState: AppState
+    
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        NavigationSplitView {
+            SidebarView()
+        } detail: {
+            if let selectedCollection = appState.selectedCollection {
+                AssetGridView(collection: selectedCollection)
+            } else {
+                Text("Select a collection to view assets")
+                    .foregroundColor(.secondary)
+                    .font(.title2)
+            }
         }
-        .padding()
+        .navigationSplitViewColumnWidth(
+            min: 200,
+            ideal: 250,
+            max: 300
+        )
     }
 }
 
 #Preview {
     ContentView()
+        .environmentObject(AppState())
+}
+
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        ContentView()
+            .environmentObject(AppState())
+    }
 }
