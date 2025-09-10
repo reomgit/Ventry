@@ -4,48 +4,78 @@ import Combine
 class AppState: ObservableObject {
     @Published var collections: [Collection] = []
     @Published var selectedCollection: Collection? = nil
+    @Published var starredItems: [StarredItem] = []
+    @Published var regularFolders: [RegularFolder] = RegularFolder.allCases
+    @Published var applications: [Application] = []
+    @Published var userTags: [UserTag] = []
+    @Published var isLoadingApplications = false
+    
+    private let applicationManager = ApplicationManager()
+    private var cancellables = Set<AnyCancellable>()
     
     init() {
-        loadMockData()
+        setupBindings()
+        Task {
+            await initializeApplications()
+        }
     }
     
-    private func loadMockData() {
-        let designAssets = [
-            Asset(name: "Logo Design", type: .image),
-            Asset(name: "Brand Guidelines", type: .document),
-            Asset(name: "Color Palette", type: .image),
-            Asset(name: "Typography Sample", type: .document)
-        ]
+    private func setupBindings() {
+        applicationManager.$isInitialized
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                Task {
+                    await self?.refreshApplications()
+                }
+            }
+            .store(in: &cancellables)
+    }
+    
+    func initializeApplications() async {
+        await MainActor.run {
+            isLoadingApplications = true
+        }
         
-        let projectFiles = [
-            Asset(name: "Project Proposal", type: .document),
-            Asset(name: "Meeting Recording", type: .video),
-            Asset(name: "Client Feedback", type: .audio),
-            Asset(name: "Final Presentation", type: .document)
-        ]
+        let scannedApps = await applicationManager.scanApplications()
         
-        let mediaLibrary = [
-            Asset(name: "Background Music", type: .audio),
-            Asset(name: "Product Photos", type: .image),
-            Asset(name: "Tutorial Video", type: .video),
-            Asset(name: "Stock Images Archive", type: .archive),
-            Asset(name: "Sound Effects", type: .audio)
-        ]
+        await MainActor.run {
+            self.applications = scannedApps
+            self.isLoadingApplications = false
+        }
+    }
+    
+    func refreshApplications() async {
+        let scannedApps = await applicationManager.scanApplications()
         
-        let miscAssets = [
-            Asset(name: "Contract Template", type: .document),
-            Asset(name: "Invoice Generator", type: .other),
-            Asset(name: "Team Photo", type: .image)
-        ]
+        await MainActor.run {
+            self.applications = scannedApps
+        }
+    }
+    
+    func addCustomDirectory(for application: Application, directory: AppDirectory) {
+        applicationManager.addCustomDirectory(for: application.bundleIdentifier, directory: directory)
         
-        collections = [
-            Collection(name: "Design Assets", assets: designAssets),
-            Collection(name: "Project Files", assets: projectFiles),
-            Collection(name: "Media Library", assets: mediaLibrary),
-            Collection(name: "Miscellaneous", assets: miscAssets)
-        ]
+        // Update the application in our list
+        if let index = applications.firstIndex(where: { $0.id == application.id }) {
+            applications[index].addDirectory(directory)
+        }
+    }
+    
+    func removeCustomDirectory(for application: Application, directoryId: UUID) {
+        applicationManager.removeCustomDirectory(for: application.bundleIdentifier, directoryId: directoryId)
         
-        selectedCollection = collections.first
+        // Update the application in our list
+        if let index = applications.firstIndex(where: { $0.id == application.id }) {
+            applications[index].removeDirectory(withId: directoryId)
+        }
+    }
+    
+    var isScanning: Bool {
+        applicationManager.isScanning
+    }
+    
+    var scanProgress: Double {
+        applicationManager.scanProgress
     }
     
     func selectCollection(_ collection: Collection) {
