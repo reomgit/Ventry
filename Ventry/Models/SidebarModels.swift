@@ -77,6 +77,7 @@ struct AppDirectory: Identifiable, Codable {
 }
 
 enum DirectoryType: String, CaseIterable, Codable {
+    case applications = "Applications"
     case effects = "Effects"
     case plugins = "Plugins"
     case presets = "Presets"
@@ -87,6 +88,8 @@ enum DirectoryType: String, CaseIterable, Codable {
     
     var systemImage: String {
         switch self {
+        case .applications:
+            return "app"
         case .effects:
             return "wand.and.stars"
         case .plugins:

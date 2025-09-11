@@ -5,8 +5,11 @@ import Combine
 class ApplicationManager: ObservableObject {
     @Published var isInitialized = false
     @Published var customDirectories: [String: [AppDirectory]] = [:]
+    @Published var showingMultipleInstallationsAlert = false
+    @Published var pendingMultipleInstallations: [String: [ApplicationScanner.DetectedApplication]] = [:]
     
     private let scanner = ApplicationScanner.shared
+    private let permissionManager = PermissionManager.shared
     private let userDefaults = UserDefaults.standard
     private let customDirectoriesKey = "CustomDirectories"
     
@@ -24,7 +27,43 @@ class ApplicationManager: ObservableObject {
     }
     
     func scanApplications() async -> [Application] {
-        return await scanner.scanForApplications()
+        let applications = await scanner.scanForApplications()
+        
+        // Check for multiple installations that need user selection
+        await MainActor.run {
+            pendingMultipleInstallations = scanner.multipleInstallationsFound
+            showingMultipleInstallationsAlert = !pendingMultipleInstallations.isEmpty
+        }
+        
+        return applications
+    }
+    
+    func selectApplicationVersion(baseName: String, selectedApp: ApplicationScanner.DetectedApplication) async -> Application? {
+        let application = await scanner.selectApplicationVersion(baseName: baseName, selectedApp: selectedApp)
+        
+        await MainActor.run {
+            // Remove from pending installations
+            pendingMultipleInstallations.removeValue(forKey: baseName)
+            
+            // Hide alert if no more pending installations
+            if pendingMultipleInstallations.isEmpty {
+                showingMultipleInstallationsAlert = false
+            }
+        }
+        
+        return application
+    }
+    
+    func dismissMultipleInstallations(for baseName: String) {
+        pendingMultipleInstallations.removeValue(forKey: baseName)
+        
+        if pendingMultipleInstallations.isEmpty {
+            showingMultipleInstallationsAlert = false
+        }
+    }
+    
+    func getAvailableApplications() async -> [String] {
+        return await scanner.getAvailableApplications()
     }
     
     func addCustomDirectory(for bundleIdentifier: String, directory: AppDirectory) {

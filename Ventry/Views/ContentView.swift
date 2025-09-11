@@ -27,6 +27,16 @@ struct ContentView: View {
             ideal: 250,
             max: 300
         )
+        .sheet(isPresented: $appState.showingMultipleInstallationsSheet) {
+            if let (baseName, installations) = appState.pendingInstallationSelection {
+                MultipleInstallationsView(
+                    baseName: baseName,
+                    installations: installations
+                ) { selectedApp in
+                    appState.selectApplicationInstallation(selectedApp)
+                }
+            }
+        }
     }
 }
 
