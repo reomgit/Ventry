@@ -20,5 +20,51 @@
             landmarkType = "24">
          </BreakpointContent>
       </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "F28AC12B-133D-4E83-8E3D-D206FF732E1A"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "Ventry/Views/MultipleInstallationsView.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "6"
+            endingLineNumber = "6"
+            landmarkName = "MultipleInstallationsView"
+            landmarkType = "14">
+            <Locations>
+               <Location
+                  uuid = "F28AC12B-133D-4E83-8E3D-D206FF732E1A - a6b7105ff92d9eb2"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "Ventry.MultipleInstallationsView.presentationMode.getter : SwiftUI.Binding&lt;SwiftUI.PresentationMode&gt;"
+                  moduleName = "Ventry.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/reom/dev/application/Ventry/%3Cstdin%3E"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "0"
+                  endingLineNumber = "0">
+               </Location>
+               <Location
+                  uuid = "F28AC12B-133D-4E83-8E3D-D206FF732E1A - 9388c433d4fe4789"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "default argument 3 of Ventry.MultipleInstallationsView.init(baseName: Swift.String, installations: Swift.Array&lt;Ventry.ApplicationScannerDetectedApplication&gt;, onSelectionMade: (Ventry.ApplicationScannerDetectedApplication) -&gt; (), presentationMode: SwiftUI.Environment&lt;SwiftUI.Binding&lt;SwiftUI.PresentationMode&gt;&gt;) -&gt; Ventry.MultipleInstallationsView"
+                  moduleName = "Ventry.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/reom/dev/application/Ventry/Ventry/Views/MultipleInstallationsView.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "0"
+                  endingLineNumber = "0">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
    </Breakpoints>
 </Bucket>

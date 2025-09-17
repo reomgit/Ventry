@@ -2,11 +2,11 @@ import SwiftUI
 
 struct MultipleInstallationsView: View {
     let baseName: String
-    let installations: [ApplicationScanner.DetectedApplication]
-    let onSelectionMade: (ApplicationScanner.DetectedApplication) -> Void
+    let installations: [ApplicationManager.DetectedApplication]
+    let onSelectionMade: (ApplicationManager.DetectedApplication) -> Void
     @Environment(\.presentationMode) var presentationMode
     
-    @State private var selectedInstallation: ApplicationScanner.DetectedApplication?
+    @State private var selectedInstallation: ApplicationManager.DetectedApplication?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -61,7 +61,7 @@ struct MultipleInstallationsView: View {
 }
 
 struct InstallationRow: View {
-    let installation: ApplicationScanner.DetectedApplication
+    let installation: ApplicationManager.DetectedApplication
     let isSelected: Bool
     let onSelect: () -> Void
     
@@ -141,14 +141,14 @@ struct SecondaryButtonStyle: ButtonStyle {
     MultipleInstallationsView(
         baseName: "Adobe After Effects",
         installations: [
-            ApplicationScanner.DetectedApplication(
+            ApplicationManager.DetectedApplication(
                 name: "Adobe After Effects 2024",
                 version: "24.0.1",
                 bundleIdentifier: "com.adobe.AfterEffects",
                 appURL: URL(fileURLWithPath: "/Applications/Adobe After Effects 2024"),
                 installationPath: "/Applications/Adobe After Effects 2024"
             ),
-            ApplicationScanner.DetectedApplication(
+            ApplicationManager.DetectedApplication(
                 name: "Adobe After Effects 2025",
                 version: "25.0.0",
                 bundleIdentifier: "com.adobe.AfterEffects",

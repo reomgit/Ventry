@@ -480,10 +480,10 @@ struct ApplicationScannerView: View {
             
             for appURL in applicationURLs {
                 if let bundleIdentifier = getBundleIdentifier(for: appURL),
-                   let directoryConfig = ApplicationDirectoryConfiguration.getDirectoryConfiguration(for: bundleIdentifier) {
-                    
+                   let supportedApp = appState.applicationManagerAccess.getSupportedApplication(for: bundleIdentifier) {
+
                     let appName = appURL.deletingPathExtension().lastPathComponent
-                    let availableDirectories = createAvailableDirectories(from: directoryConfig, appName: appName, appURL: appURL)
+                    let availableDirectories = createAvailableDirectories(from: supportedApp, appName: appName, appURL: appURL)
                     
                     if !availableDirectories.isEmpty {
                         let detectedApp = DetectedApplication(
@@ -507,40 +507,36 @@ struct ApplicationScannerView: View {
         return bundle.bundleIdentifier
     }
     
-    private func createAvailableDirectories(from config: [String: [DirectoryType]], appName: String, appURL: URL) -> [AvailableDirectory] {
+    private func createAvailableDirectories(from supportedApp: SupportedApplication, appName: String, appURL: URL) -> [AvailableDirectory] {
         var directories: [AvailableDirectory] = []
-        
-        // Add plugins from the app bundle itself (for versioned Adobe apps)
-        let pluginsPath = appURL.appendingPathComponent("Plug-ins")
-        if FileManager.default.fileExists(atPath: pluginsPath.path) {
+
+        // Add paths from the configuration
+        for supportedPath in supportedApp.paths {
+            var expandedPath = supportedPath.path
+
+            // Handle Adobe year-based paths
+            if expandedPath.contains("{year}") {
+                let currentYear = Calendar.current.component(.year, from: Date())
+                expandedPath = expandedPath.replacingOccurrences(of: "{year}", with: String(currentYear))
+            }
+
+            // Expand home directory
+            expandedPath = expandedPath.replacingOccurrences(of: "~", with: FileManager.default.homeDirectoryForCurrentUser.path)
+
+            // Check if directory exists
+            let directoryExists = FileManager.default.fileExists(atPath: expandedPath)
+
+            let directoryType = DirectoryType(rawValue: supportedPath.type) ?? .other
+
             let availableDir = AvailableDirectory(
-                name: "Plug-ins",
-                path: pluginsPath.path,
-                type: .plugins,
-                isSelected: true
+                name: supportedPath.name,
+                path: expandedPath,
+                type: directoryType,
+                isSelected: directoryExists // Only select existing directories by default
             )
             directories.append(availableDir)
         }
-        
-        // Add configured paths from the configuration
-        for (path, types) in config {
-            for type in types {
-                let expandedPath = path.replacingOccurrences(of: "~", with: FileManager.default.homeDirectoryForCurrentUser.path)
-                let directoryName = URL(fileURLWithPath: expandedPath).lastPathComponent
-                
-                // Check if directory exists
-                let directoryExists = FileManager.default.fileExists(atPath: expandedPath)
-                
-                let availableDir = AvailableDirectory(
-                    name: directoryName,
-                    path: expandedPath,
-                    type: type,
-                    isSelected: directoryExists // Only select existing directories by default
-                )
-                directories.append(availableDir)
-            }
-        }
-        
+
         return directories
     }
     
@@ -805,13 +801,13 @@ struct ManualAppSelectionView: View {
             return
         }
         
-        guard let directoryConfig = ApplicationDirectoryConfiguration.getDirectoryConfiguration(for: bundleIdentifier) else {
+        guard let supportedApp = appState.applicationManagerAccess.getSupportedApplication(for: bundleIdentifier) else {
             errorMessage = "This application is not supported. Only applications with configured directory types can be added."
             return
         }
         
         let appName = url.deletingPathExtension().lastPathComponent
-        let availableDirectories = createAvailableDirectories(from: directoryConfig, appName: appName, appURL: url)
+        let availableDirectories = createAvailableDirectories(from: supportedApp, appName: appName, appURL: url)
         
         if availableDirectories.isEmpty {
             errorMessage = "No configured directories found for this application"
@@ -830,40 +826,36 @@ struct ManualAppSelectionView: View {
         return bundle.bundleIdentifier
     }
     
-    private func createAvailableDirectories(from config: [String: [DirectoryType]], appName: String, appURL: URL) -> [AvailableDirectory] {
+    private func createAvailableDirectories(from supportedApp: SupportedApplication, appName: String, appURL: URL) -> [AvailableDirectory] {
         var directories: [AvailableDirectory] = []
-        
-        // Add plugins from the app bundle itself (for versioned Adobe apps)
-        let pluginsPath = appURL.appendingPathComponent("Plug-ins")
-        if FileManager.default.fileExists(atPath: pluginsPath.path) {
+
+        // Add paths from the configuration
+        for supportedPath in supportedApp.paths {
+            var expandedPath = supportedPath.path
+
+            // Handle Adobe year-based paths
+            if expandedPath.contains("{year}") {
+                let currentYear = Calendar.current.component(.year, from: Date())
+                expandedPath = expandedPath.replacingOccurrences(of: "{year}", with: String(currentYear))
+            }
+
+            // Expand home directory
+            expandedPath = expandedPath.replacingOccurrences(of: "~", with: FileManager.default.homeDirectoryForCurrentUser.path)
+
+            // Check if directory exists
+            let directoryExists = FileManager.default.fileExists(atPath: expandedPath)
+
+            let directoryType = DirectoryType(rawValue: supportedPath.type) ?? .other
+
             let availableDir = AvailableDirectory(
-                name: "Plug-ins",
-                path: pluginsPath.path,
-                type: .plugins,
-                isSelected: true
+                name: supportedPath.name,
+                path: expandedPath,
+                type: directoryType,
+                isSelected: directoryExists // Only select existing directories by default
             )
             directories.append(availableDir)
         }
-        
-        // Add configured paths from the configuration
-        for (path, types) in config {
-            for type in types {
-                let expandedPath = path.replacingOccurrences(of: "~", with: FileManager.default.homeDirectoryForCurrentUser.path)
-                let directoryName = URL(fileURLWithPath: expandedPath).lastPathComponent
-                
-                // Check if directory exists
-                let directoryExists = FileManager.default.fileExists(atPath: expandedPath)
-                
-                let availableDir = AvailableDirectory(
-                    name: directoryName,
-                    path: expandedPath,
-                    type: type,
-                    isSelected: directoryExists // Only select existing directories by default
-                )
-                directories.append(availableDir)
-            }
-        }
-        
+
         return directories
     }
     

@@ -10,10 +10,15 @@ class AppState: ObservableObject {
     @Published var userTags: [UserTag] = []
     @Published var isLoadingApplications = false
     @Published var showingMultipleInstallationsSheet = false
-    @Published var pendingInstallationSelection: (String, [ApplicationScanner.DetectedApplication])? = nil
+    @Published var pendingInstallationSelection: (String, [ApplicationManager.DetectedApplication])? = nil
     
     private let applicationManager = ApplicationManager()
     private var cancellables = Set<AnyCancellable>()
+
+    // Provide access to applicationManager for views that need it
+    var applicationManagerAccess: ApplicationManager {
+        return applicationManager
+    }
     
     init() {
         setupBindings()
@@ -90,7 +95,7 @@ class AppState: ObservableObject {
         applicationManager.scanProgress
     }
     
-    func selectApplicationInstallation(_ selectedApp: ApplicationScanner.DetectedApplication) {
+    func selectApplicationInstallation(_ selectedApp: ApplicationManager.DetectedApplication) {
         guard let (baseName, _) = pendingInstallationSelection else { return }
         
         Task {

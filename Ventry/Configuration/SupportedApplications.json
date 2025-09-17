@@ -1,0 +1,55 @@
+{
+  "supportedApplications": {
+    "com.adobe.AfterEffects": {
+      "displayName": "Adobe After Effects",
+      "appPaths": [
+        "/Applications/Adobe After Effects 2025/Adobe After Effects 2025.app/",
+        "/Applications/Adobe After Effects 2026/Adobe After Effects 2026.app/",
+        "/Applications/Adobe After Effects 2027/Adobe After Effects 2027.app/",
+        "/Applications/Adobe After Effects 2028/Adobe After Effects 2028.app/",
+        "/Applications/Adobe After Effects 2029/Adobe After Effects 2029.app/",
+        "/Applications/Adobe After Effects 2030/Adobe After Effects 2030.app/"
+      ],
+      "paths": [
+        {
+          "name": "Plugins",
+          "path": "/Applications/Adobe After Effects {year}/Plug-ins/",
+          "type": "plugins",
+          "icon": "puzzlepiece.extension"
+        },
+        {
+          "name": "Scripts",
+          "path": "/Applications/Adobe After Effects 2025/Scripts/",
+          "type": "scripts",
+          "icon": "terminal"
+        },
+        {
+          "name": "User Presets",
+          "path": "/Documents/Adobe/After Effects 2025/User Presets/",
+          "type": "presets",
+          "icon": "folder"
+        },
+        {
+          "name": "Workspace",
+          "path": "/Library/Preferences/Adobe/After Effects/25.0/Workspaces.xml/",
+          "type": "workspace",
+          "icon": "rectangle.on.rectangle"
+        }
+      ]
+    },
+    "org.blenderfoundation.blender": {
+      "displayName": "Blender",
+      "appPaths": [
+        "/Applications/blender.app/"
+      ],
+      "paths": [
+        {
+          "name": "Plugins",
+          "path": "/Library/Application Support/Blender/3.5/scripts/addons/",
+          "type": "plugins",
+          "icon": "plus.app"
+        }
+      ]
+    }
+  }
+}
