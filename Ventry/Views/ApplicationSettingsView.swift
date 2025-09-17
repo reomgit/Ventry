@@ -7,6 +7,7 @@ struct ApplicationSettingsView: View {
     @State private var selectedApplication: Application?
     @State private var showingApplicationScanner = false
     @State private var showingManualAppSelection = false
+    @State private var showingMultipleAppSelection = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -40,9 +41,25 @@ struct ApplicationSettingsView: View {
                     }
                     .disabled(appState.isScanning)
                     
-                    Button(action: {
-                        showingManualAppSelection = true
-                    }) {
+                    Menu {
+                        Button(action: {
+                            showingManualAppSelection = true
+                        }) {
+                            HStack {
+                                Image(systemName: "plus.app")
+                                Text("Add Single App")
+                            }
+                        }
+
+                        Button(action: {
+                            showingMultipleAppSelection = true
+                        }) {
+                            HStack {
+                                Image(systemName: "plus.square.on.square")
+                                Text("Add Multiple Apps")
+                            }
+                        }
+                    } label: {
                         HStack {
                             Image(systemName: "plus.app")
                             Text("Add App")
@@ -74,7 +91,7 @@ struct ApplicationSettingsView: View {
                     Image(systemName: "app.dashed")
                         .font(.system(size: 48))
                         .foregroundColor(.secondary)
-                    Text("No supported applications found")
+                    Text("No applications found")
                         .font(.title2)
                         .fontWeight(.medium)
                     Text("Scan for applications or add custom directories")
@@ -111,6 +128,10 @@ struct ApplicationSettingsView: View {
         }
         .sheet(isPresented: $showingManualAppSelection) {
             ManualAppSelectionView()
+                .environmentObject(appState)
+        }
+        .sheet(isPresented: $showingMultipleAppSelection) {
+            ManualMultipleAppSelectionView()
                 .environmentObject(appState)
         }
     }
@@ -422,7 +443,7 @@ struct ApplicationScannerView: View {
                         .font(.title2)
                         .fontWeight(.medium)
                     
-                    Text("No applications with configured directory types were found in your Applications folder.")
+                    Text("No supported applications were found in your Applications folder.")
                         .multilineTextAlignment(.center)
                         .foregroundColor(.secondary)
                         .padding(.horizontal)
@@ -484,7 +505,7 @@ struct ApplicationScannerView: View {
 
                     let appName = appURL.deletingPathExtension().lastPathComponent
                     let availableDirectories = createAvailableDirectories(from: supportedApp, appName: appName, appURL: appURL)
-                    
+
                     if !availableDirectories.isEmpty {
                         let detectedApp = DetectedApplication(
                             name: appName,
@@ -539,7 +560,7 @@ struct ApplicationScannerView: View {
 
         return directories
     }
-    
+
     private func addSelectedApplications() {
         for detectedApp in detectedApplications {
             let selectedDirectories = detectedApp.availableDirectories
@@ -712,15 +733,28 @@ struct ManualAppSelectionView: View {
                 Spacer()
                 
                 if let detectedApp = detectedApp {
-                    Button("Add Selected") {
-                        addSelectedApplication()
+                    if detectedApp.availableDirectories.isEmpty {
+                        // Unsupported app - show "Add Paths" button
+                        Button("Add Paths") {
+                            addSelectedApplication()
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.accentColor)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                    } else {
+                        // Supported app - show "Add Selected" button
+                        Button("Add Selected") {
+                            addSelectedApplication()
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.accentColor)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                        .disabled(detectedApp.availableDirectories.filter { $0.isSelected }.isEmpty)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.accentColor)
-                    .foregroundColor(.white)
-                    .cornerRadius(8)
-                    .disabled(detectedApp.availableDirectories.filter { $0.isSelected }.isEmpty)
                 } else {
                     Button("") { }
                         .opacity(0)
@@ -732,11 +766,28 @@ struct ManualAppSelectionView: View {
             Divider()
             
             if let detectedApp = detectedApp {
-                // Show detected app with selectable directories
-                List {
-                    DetectedApplicationRowView(detectedApp: .constant(detectedApp))
+                if detectedApp.availableDirectories.isEmpty {
+                    // Unsupported app - show custom path addition interface
+                    UnsupportedAppView(
+                        detectedApp: detectedApp,
+                        onAddPathsNow: {
+                            // Add app and then show directory addition interface
+                            addApplicationWithoutDirectories()
+                            // TODO: Show custom directory addition interface
+                        },
+                        onAddPathsLater: {
+                            // Just add the app without directories
+                            addApplicationWithoutDirectories()
+                            presentationMode.wrappedValue.dismiss()
+                        }
+                    )
+                } else {
+                    // Supported app - show detected app with selectable directories
+                    List {
+                        DetectedApplicationRowView(detectedApp: .constant(detectedApp))
+                    }
+                    .listStyle(PlainListStyle())
                 }
-                .listStyle(PlainListStyle())
             } else {
                 // Show app selection interface
                 Spacer()
@@ -749,7 +800,7 @@ struct ManualAppSelectionView: View {
                         .font(.title)
                         .fontWeight(.bold)
                     
-                    Text("Choose an application (.app) file to add its configured directories to Ventry.")
+                    Text("Choose an application (.app) file to add its directories to Ventry.")
                         .multilineTextAlignment(.center)
                         .foregroundColor(.secondary)
                         .padding(.horizontal)
@@ -801,24 +852,31 @@ struct ManualAppSelectionView: View {
             return
         }
         
-        guard let supportedApp = appState.applicationManagerAccess.getSupportedApplication(for: bundleIdentifier) else {
-            errorMessage = "This application is not supported. Only applications with configured directory types can be added."
-            return
-        }
-        
         let appName = url.deletingPathExtension().lastPathComponent
-        let availableDirectories = createAvailableDirectories(from: supportedApp, appName: appName, appURL: url)
-        
-        if availableDirectories.isEmpty {
-            errorMessage = "No configured directories found for this application"
-            return
+
+        // Check if app is supported and has configured directories
+        if let supportedApp = appState.applicationManagerAccess.getSupportedApplication(for: bundleIdentifier) {
+            let availableDirectories = createAvailableDirectories(from: supportedApp, appName: appName, appURL: url)
+
+            if availableDirectories.isEmpty {
+                errorMessage = "No configured directories found for this application"
+                return
+            }
+
+            detectedApp = DetectedApplication(
+                name: appName,
+                bundleIdentifier: bundleIdentifier,
+                availableDirectories: availableDirectories
+            )
+        } else {
+            // For unsupported apps, create empty DetectedApplication
+            // User will add custom directories manually
+            detectedApp = DetectedApplication(
+                name: appName,
+                bundleIdentifier: bundleIdentifier,
+                availableDirectories: []
+            )
         }
-        
-        detectedApp = DetectedApplication(
-            name: appName,
-            bundleIdentifier: bundleIdentifier,
-            availableDirectories: availableDirectories
-        )
     }
     
     private func getBundleIdentifier(for appURL: URL) -> String? {
@@ -858,28 +916,384 @@ struct ManualAppSelectionView: View {
 
         return directories
     }
-    
+
+
+    private func addApplicationWithoutDirectories() {
+        guard let detectedApp = detectedApp else { return }
+
+        let application = Application(
+            name: detectedApp.name,
+            bundleIdentifier: detectedApp.bundleIdentifier,
+            directories: []
+        )
+
+        // Add to app state if not already exists
+        if !appState.applications.contains(where: { $0.bundleIdentifier == application.bundleIdentifier }) {
+            appState.applications.append(application)
+        }
+    }
+
     private func addSelectedApplication() {
         guard let detectedApp = detectedApp else { return }
-        
-        let selectedDirectories = detectedApp.availableDirectories
-            .filter { $0.isSelected }
-            .map { AppDirectory(name: $0.name, path: $0.path, type: $0.type) }
-        
-        if !selectedDirectories.isEmpty {
-            let application = Application(
-                name: detectedApp.name,
-                bundleIdentifier: detectedApp.bundleIdentifier,
-                directories: selectedDirectories
-            )
-            
-            // Add to app state if not already exists
-            if !appState.applications.contains(where: { $0.bundleIdentifier == application.bundleIdentifier }) {
-                appState.applications.append(application)
+
+        if detectedApp.availableDirectories.isEmpty {
+            // For unsupported apps, add the app without directories
+            // User will add custom directories later
+            addApplicationWithoutDirectories()
+        } else {
+            // For supported apps, add selected directories
+            let selectedDirectories = detectedApp.availableDirectories
+                .filter { $0.isSelected }
+                .map { AppDirectory(name: $0.name, path: $0.path, type: $0.type) }
+
+            if !selectedDirectories.isEmpty {
+                let application = Application(
+                    name: detectedApp.name,
+                    bundleIdentifier: detectedApp.bundleIdentifier,
+                    directories: selectedDirectories
+                )
+
+                // Add to app state if not already exists
+                if !appState.applications.contains(where: { $0.bundleIdentifier == application.bundleIdentifier }) {
+                    appState.applications.append(application)
+                }
             }
         }
-        
+
         presentationMode.wrappedValue.dismiss()
+    }
+}
+
+struct UnsupportedAppView: View {
+    let detectedApp: DetectedApplication
+    let onAddPathsNow: () -> Void
+    let onAddPathsLater: () -> Void
+
+    var body: some View {
+        VStack(spacing: 20) {
+            // App info section
+            VStack(spacing: 12) {
+                Image(systemName: "app.badge.checkmark")
+                    .font(.system(size: 48))
+                    .foregroundColor(.accentColor)
+
+                VStack(spacing: 4) {
+                    Text(detectedApp.name)
+                        .font(.title2)
+                        .fontWeight(.bold)
+
+                    Text(detectedApp.bundleIdentifier)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Divider()
+
+            // Instructions
+            VStack(spacing: 12) {
+                Text("Unsupported Application")
+                    .font(.headline)
+                    .foregroundColor(.secondary)
+
+                Text("This application is not in our supported applications list. You can add custom paths for this application.")
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal)
+            }
+
+            // Condition 0: Ask user to add paths now or later
+            VStack(spacing: 16) {
+                Text("Would you like to add custom paths now or later?")
+                    .font(.headline)
+                    .multilineTextAlignment(.center)
+
+                HStack(spacing: 20) {
+                    Button("Add Paths Now") {
+                        onAddPathsNow()
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+
+                    Button("Add Paths Later") {
+                        onAddPathsLater()
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                }
+            }
+            .padding()
+            .background(Color(.controlBackgroundColor).opacity(0.5))
+            .cornerRadius(12)
+
+            Spacer()
+        }
+        .padding()
+    }
+}
+
+struct ManualMultipleAppSelectionView: View {
+    @EnvironmentObject var appState: AppState
+    @Environment(\.presentationMode) var presentationMode
+
+    @State private var selectedAppURLs: [URL] = []
+    @State private var showingFileImporter = false
+    @State private var detectedApps: [DetectedApplication] = []
+    @State private var showingInstallationFlow = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Button("Cancel") {
+                    presentationMode.wrappedValue.dismiss()
+                }
+
+                Spacer()
+
+                Text("Add Multiple Applications")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+
+                Spacer()
+
+                if !detectedApps.isEmpty {
+                    Button("Install All") {
+                        showingInstallationFlow = true
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                } else {
+                    Button("") { }
+                        .opacity(0)
+                        .disabled(true)
+                }
+            }
+            .padding()
+
+            Divider()
+
+            if detectedApps.isEmpty {
+                // Show app selection interface
+                Spacer()
+                VStack(spacing: 20) {
+                    Image(systemName: "square.stack.3d.up.fill")
+                        .font(.system(size: 64))
+                        .foregroundColor(.accentColor)
+
+                    Text("Select Multiple Applications")
+                        .font(.title)
+                        .fontWeight(.bold)
+
+                    Text("Choose multiple application (.app) files to configure and add them to Ventry one by one.")
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal)
+
+                    if let errorMessage = errorMessage {
+                        Text(errorMessage)
+                            .foregroundColor(.red)
+                            .padding()
+                            .background(Color.red.opacity(0.1))
+                            .cornerRadius(8)
+                    }
+
+                    Button("Choose Applications") {
+                        showingFileImporter = true
+                    }
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: 200)
+                    .padding()
+                    .background(Color.accentColor)
+                    .cornerRadius(12)
+                }
+                Spacer()
+            } else {
+                // Show selected apps list
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Selected Applications (\(detectedApps.count))")
+                        .font(.headline)
+                        .padding(.horizontal)
+                        .padding(.top)
+
+                    List {
+                        ForEach(detectedApps) { app in
+                            MultipleAppRowView(
+                                detectedApp: app,
+                                isSupported: appState.applicationManagerAccess.isApplicationSupported(app.bundleIdentifier),
+                                onRemove: {
+                                    removeApp(app)
+                                }
+                            )
+                        }
+                    }
+                    .listStyle(PlainListStyle())
+
+                    HStack {
+                        Button("Add More Apps") {
+                            showingFileImporter = true
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+
+                        Spacer()
+                    }
+                    .padding(.horizontal)
+                    .padding(.bottom)
+                }
+            }
+        }
+        .frame(minWidth: 600, minHeight: 500)
+        .fileImporter(
+            isPresented: $showingFileImporter,
+            allowedContentTypes: [UTType.applicationBundle],
+            allowsMultipleSelection: true
+        ) { result in
+            switch result {
+            case .success(let urls):
+                processSelectedApps(urls: urls)
+            case .failure(let error):
+                errorMessage = "Failed to select applications: \(error.localizedDescription)"
+            }
+        }
+        .sheet(isPresented: $showingInstallationFlow) {
+            ApplicationInstallationFlowView(
+                detectedApps: detectedApps,
+                supportedApps: appState.applicationManagerAccess.supportedApplications,
+                onComplete: { installedApps in
+                    // Add installed apps to app state
+                    for app in installedApps {
+                        if !appState.applications.contains(where: { $0.bundleIdentifier == app.bundleIdentifier }) {
+                            appState.applications.append(app)
+                        }
+                    }
+                    presentationMode.wrappedValue.dismiss()
+                }
+            )
+        }
+    }
+
+    private func processSelectedApps(urls: [URL]) {
+        errorMessage = nil
+        var newDetectedApps: [DetectedApplication] = []
+
+        for url in urls {
+            guard let bundleIdentifier = getBundleIdentifier(for: url) else {
+                errorMessage = "Could not read bundle identifier from \(url.lastPathComponent)"
+                continue
+            }
+
+            // Skip if already added
+            if detectedApps.contains(where: { $0.bundleIdentifier == bundleIdentifier }) {
+                continue
+            }
+
+            let appName = url.deletingPathExtension().lastPathComponent
+
+            // Check if app is supported and create available directories
+            var availableDirectories: [AvailableDirectory] = []
+            if let supportedApp = appState.applicationManagerAccess.getSupportedApplication(for: bundleIdentifier) {
+                availableDirectories = createAvailableDirectories(from: supportedApp, appName: appName, appURL: url)
+            }
+
+            let detectedApp = DetectedApplication(
+                name: appName,
+                bundleIdentifier: bundleIdentifier,
+                availableDirectories: availableDirectories
+            )
+            newDetectedApps.append(detectedApp)
+        }
+
+        detectedApps.append(contentsOf: newDetectedApps)
+    }
+
+    private func removeApp(_ app: DetectedApplication) {
+        detectedApps.removeAll { $0.id == app.id }
+    }
+
+    private func getBundleIdentifier(for appURL: URL) -> String? {
+        guard let bundle = Bundle(url: appURL) else { return nil }
+        return bundle.bundleIdentifier
+    }
+
+    private func createAvailableDirectories(from supportedApp: SupportedApplication, appName: String, appURL: URL) -> [AvailableDirectory] {
+        var directories: [AvailableDirectory] = []
+
+        for supportedPath in supportedApp.paths {
+            var expandedPath = supportedPath.path
+
+            // Handle Adobe year-based paths
+            if expandedPath.contains("{year}") {
+                let currentYear = Calendar.current.component(.year, from: Date())
+                expandedPath = expandedPath.replacingOccurrences(of: "{year}", with: String(currentYear))
+            }
+
+            // Expand home directory
+            expandedPath = expandedPath.replacingOccurrences(of: "~", with: FileManager.default.homeDirectoryForCurrentUser.path)
+
+            // Check if directory exists
+            let directoryExists = FileManager.default.fileExists(atPath: expandedPath)
+            let directoryType = DirectoryType(rawValue: supportedPath.type) ?? .other
+
+            let availableDir = AvailableDirectory(
+                name: supportedPath.name,
+                path: expandedPath,
+                type: directoryType,
+                isSelected: directoryExists
+            )
+            directories.append(availableDir)
+        }
+
+        return directories
+    }
+}
+
+struct MultipleAppRowView: View {
+    let detectedApp: DetectedApplication
+    let isSupported: Bool
+    let onRemove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: isSupported ? "app.badge.checkmark" : "app.badge.questionmark")
+                .font(.title2)
+                .foregroundColor(isSupported ? .accentColor : .orange)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(detectedApp.name)
+                    .font(.headline)
+                    .fontWeight(.medium)
+
+                HStack {
+                    Text(isSupported ? "Supported" : "Unsupported")
+                        .font(.caption)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(isSupported ? Color.accentColor.opacity(0.2) : Color.orange.opacity(0.2))
+                        .foregroundColor(isSupported ? .accentColor : .orange)
+                        .cornerRadius(4)
+
+                    if isSupported {
+                        Text("(\(detectedApp.availableDirectories.count) paths)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Text(detectedApp.bundleIdentifier)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.secondary)
+                    .font(.title3)
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.vertical, 8)
     }
 }
 
