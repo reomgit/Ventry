@@ -26,7 +26,12 @@ final class ApplicationManager: ObservableObject {
     private var storedApplications: [Application] = []
 
     // Supported applications loaded from JSON
-    private var supportedApplications: [String: SupportedApplication] = [:]
+    private var _supportedApplications: [String: SupportedApplication] = [:]
+
+    // Public access to supported applications for views
+    var supportedApplications: [String: SupportedApplication] {
+        return _supportedApplications
+    }
     
     init() {
         loadSupportedApplications()
@@ -156,18 +161,18 @@ final class ApplicationManager: ObservableObject {
         do {
             let data = try Data(contentsOf: url)
             let jsonResponse = try JSONDecoder().decode(SupportedApplicationsResponse.self, from: data)
-            self.supportedApplications = jsonResponse.supportedApplications
+            self._supportedApplications = jsonResponse.supportedApplications
         } catch {
             print("Failed to load supported applications: \(error)")
         }
     }
 
     func getSupportedApplication(for bundleIdentifier: String) -> SupportedApplication? {
-        return supportedApplications[bundleIdentifier]
+        return _supportedApplications[bundleIdentifier]
     }
 
     func isApplicationSupported(_ bundleIdentifier: String) -> Bool {
-        return supportedApplications[bundleIdentifier] != nil
+        return _supportedApplications[bundleIdentifier] != nil
     }
 }
 
