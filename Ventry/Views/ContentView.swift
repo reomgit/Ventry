@@ -11,22 +11,25 @@ struct ContentView: View {
     @EnvironmentObject var appState: AppState
     
     var body: some View {
-        NavigationSplitView {
-            SidebarView()
-        } detail: {
-            if let selectedCollection = appState.selectedCollection {
-                AssetGridView(collection: selectedCollection)
-            } else {
-                Text("Select a collection to view assets")
-                    .foregroundColor(.secondary)
-                    .font(.title2)
+        GeometryReader { geometry in
+            NavigationSplitView {
+                SidebarView()
+            } detail: {
+                if let selectedCollection = appState.selectedCollection {
+                    AssetGridView(collection: selectedCollection)
+                } else {
+                    Text("Select a collection to view assets")
+                        .foregroundColor(.secondary)
+                        .font(.title2)
+                }
             }
+            .navigationSplitViewColumnWidth(
+                min: 200,
+                ideal: min(250, geometry.size.width * 0.35),
+                max: max(250, min(300, geometry.size.width * 0.35))
+            )
+            .navigationSplitViewStyle(.balanced)
         }
-        .navigationSplitViewColumnWidth(
-            min: 200,
-            ideal: 250,
-            max: 300
-        )
         .sheet(isPresented: $appState.showingMultipleInstallationsSheet) {
             if let (baseName, installations) = appState.pendingInstallationSelection {
                 MultipleInstallationsView(
