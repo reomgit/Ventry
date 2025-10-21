@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"name": "swift-library",
+			"path": "swift-library"
+		}
+	],
+	"settings": {}
+}
