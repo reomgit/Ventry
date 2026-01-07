@@ -451,7 +451,7 @@ struct ApplicationScannerView: View {
                                 Button(action: scanSelectedApplications) {
                                     HStack {
                                         Image(systemName: "magnifyingglass")
-                                        Text("Scan \(selectedAppBundles.count) App\(selectedAppBundles.count == 1 ? "" : "s")")
+                                        Text("Add \(selectedAppBundles.count) App\(selectedAppBundles.count == 1 ? "" : "s")")
                                     }
                                     .padding(.horizontal, 16)
                                     .padding(.vertical, 8)
@@ -618,7 +618,8 @@ struct ApplicationScannerView: View {
 struct DetectedApplicationRowView: View {
     @Binding var detectedApp: DetectedApplication
     @State private var isExpanded = true
-    
+    @State private var showingAddCustomPath = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Application header
@@ -627,14 +628,14 @@ struct DetectedApplicationRowView: View {
                     Text(detectedApp.name)
                         .font(.headline)
                         .fontWeight(.medium)
-                    
+
                     Text(detectedApp.bundleIdentifier)
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                
+
                 Spacer()
-                
+
                 // Selected count badge
                 let selectedCount = detectedApp.availableDirectories.filter { $0.isSelected }.count
                 Text("\(selectedCount)/\(detectedApp.availableDirectories.count)")
@@ -645,7 +646,7 @@ struct DetectedApplicationRowView: View {
                     .background(selectedCount > 0 ? Color.accentColor.opacity(0.2) : Color.gray.opacity(0.2))
                     .foregroundColor(selectedCount > 0 ? .accentColor : .secondary)
                     .cornerRadius(12)
-                
+
                 Button(action: {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         isExpanded.toggle()
@@ -657,13 +658,27 @@ struct DetectedApplicationRowView: View {
                 }
                 .buttonStyle(PlainButtonStyle())
             }
-            
+
             // Directories list (when expanded)
             if isExpanded {
                 LazyVStack(alignment: .leading, spacing: 8) {
                     ForEach($detectedApp.availableDirectories) { $directory in
                         AvailableDirectoryRowView(directory: $directory)
                     }
+
+                    // Add Custom Path button
+                    Button(action: {
+                        showingAddCustomPath = true
+                    }) {
+                        HStack {
+                            Image(systemName: "plus.circle.fill")
+                            Text("Add Custom Path")
+                        }
+                        .font(.subheadline)
+                        .foregroundColor(.accentColor)
+                        .padding(.vertical, 8)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
                 .padding(.leading, 16)
             }
@@ -671,6 +686,14 @@ struct DetectedApplicationRowView: View {
         .padding()
         .background(Color(.controlBackgroundColor).opacity(0.5))
         .cornerRadius(12)
+        .sheet(isPresented: $showingAddCustomPath) {
+            AddCustomPathToDetectedAppView(
+                detectedApp: $detectedApp,
+                onComplete: {
+                    showingAddCustomPath = false
+                }
+            )
+        }
     }
 }
 
@@ -1002,6 +1025,119 @@ struct LoadedAppRow: View {
             .cornerRadius(8)
         }
         .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - Add Custom Path to Detected App View
+struct AddCustomPathToDetectedAppView: View {
+    @Binding var detectedApp: DetectedApplication
+    let onComplete: () -> Void
+    @Environment(\.presentationMode) var presentationMode
+
+    @State private var directoryName = ""
+    @State private var directoryPath = ""
+    @State private var selectedType = DirectoryType.other
+    @State private var showingFileImporter = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Button("Cancel") {
+                    presentationMode.wrappedValue.dismiss()
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                Spacer()
+
+                VStack(spacing: 4) {
+                    Text("Add Custom Path")
+                        .font(.title2)
+                        .fontWeight(.bold)
+
+                    Text("for \(detectedApp.name)")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                Button("Add") {
+                    addCustomPath()
+                }
+                .buttonStyle(PlainButtonStyle())
+                .disabled(directoryName.isEmpty || directoryPath.isEmpty)
+            }
+            .padding()
+
+            Divider()
+
+            // Form content
+            Form {
+                Section(header: Text("Directory Information")) {
+                    TextField("Directory Name", text: $directoryName)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+
+                    Picker("Type", selection: $selectedType) {
+                        ForEach(DirectoryType.allCases, id: \.self) { type in
+                            HStack {
+                                Image(systemName: type.systemImage)
+                                Text(type.rawValue)
+                            }
+                            .tag(type)
+                        }
+                    }
+
+                    HStack {
+                        TextField("Path", text: $directoryPath)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+
+                        Button("Browse") {
+                            showingFileImporter = true
+                        }
+                    }
+                }
+
+                Section(header: Text("Application")) {
+                    Text(detectedApp.name)
+                        .foregroundColor(.secondary)
+                    Text(detectedApp.bundleIdentifier)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .fileImporter(
+                isPresented: $showingFileImporter,
+                allowedContentTypes: [.folder],
+                allowsMultipleSelection: false
+            ) { result in
+                switch result {
+                case .success(let urls):
+                    if let url = urls.first {
+                        directoryPath = url.path
+                        if directoryName.isEmpty {
+                            directoryName = url.lastPathComponent
+                        }
+                    }
+                case .failure(let error):
+                    print("File selection error: \(error)")
+                }
+            }
+        }
+        .frame(minWidth: 500, minHeight: 400)
+    }
+
+    private func addCustomPath() {
+        let newDirectory = AvailableDirectory(
+            name: directoryName,
+            path: directoryPath,
+            type: selectedType,
+            isSelected: true
+        )
+
+        detectedApp.availableDirectories.append(newDirectory)
+        onComplete()
+        presentationMode.wrappedValue.dismiss()
     }
 }
 
