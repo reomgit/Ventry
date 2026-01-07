@@ -301,7 +301,7 @@ struct CustomPathsAdditionView: View {
             }
             .padding()
         }
-        .frame(minWidth: 500, minHeight: 400)
+        .frame(minWidth: 550, idealWidth: 600, maxWidth: 700, minHeight: 450, idealHeight: 500, maxHeight: 600)
     }
 
     private func completeCustomPaths() {

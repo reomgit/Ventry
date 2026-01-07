@@ -26,7 +26,7 @@ struct ApplicationSettingsView: View {
                             if appState.isScanning {
                                 ProgressView()
                                     .scaleEffect(0.8)
-                                Text("Scanning...")
+v                                Text("Scanning...")
                             } else {
                                 Image(systemName: "arrow.clockwise")
                                 Text("Scan Apps")
@@ -275,33 +275,68 @@ struct AddDirectoryView: View {
             Divider()
 
             // Form content
-            Form {
-                Section(header: Text("Directory Information")) {
-                    TextField("Directory Name", text: $directoryName)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Directory Information Section
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Directory Information")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
 
-                    Picker("Type", selection: $selectedType) {
-                        ForEach(DirectoryType.allCases, id: \.self) { type in
-                            HStack {
-                                Image(systemName: type.systemImage)
-                                Text(type.rawValue)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Directory Name")
+                                .font(.subheadline)
+                            TextField("Enter directory name", text: $directoryName)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                        }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Type")
+                                .font(.subheadline)
+                            Picker("Type", selection: $selectedType) {
+                                ForEach(DirectoryType.allCases, id: \.self) { type in
+                                    HStack {
+                                        Image(systemName: type.systemImage)
+                                        Text(type.rawValue)
+                                    }
+                                    .tag(type)
+                                }
                             }
-                            .tag(type)
+                            .pickerStyle(MenuPickerStyle())
+                        }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Directory Path")
+                                .font(.subheadline)
+                            HStack(spacing: 8) {
+                                TextField("Enter or browse for path", text: $directoryPath)
+                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+
+                                Button("Browse...") {
+                                    showingFileImporter = true
+                                }
+                                .buttonStyle(BorderedButtonStyle())
+                            }
                         }
                     }
+                    .padding()
+                    .background(Color(.controlBackgroundColor).opacity(0.5))
+                    .cornerRadius(8)
 
-                    HStack {
-                        TextField("Path", text: $directoryPath)
+                    // Application Info Section
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Application")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
 
-                        Button("Browse") {
-                            showingFileImporter = true
-                        }
+                        Text(application.name)
+                            .font(.body)
                     }
+                    .padding()
+                    .background(Color(.controlBackgroundColor).opacity(0.5))
+                    .cornerRadius(8)
                 }
-
-                Section(header: Text("Application")) {
-                    Text(application.name)
-                        .foregroundColor(.secondary)
-                }
+                .padding()
             }
             .fileImporter(
                 isPresented: $showingFileImporter,
@@ -321,7 +356,7 @@ struct AddDirectoryView: View {
                 }
             }
         }
-        .frame(minWidth: 500, minHeight: 400)
+        .frame(minWidth: 550, idealWidth: 600, maxWidth: 700, minHeight: 450, idealHeight: 500, maxHeight: 600)
     }
     
     private func addDirectory() {
@@ -1073,38 +1108,73 @@ struct AddCustomPathToDetectedAppView: View {
             Divider()
 
             // Form content
-            Form {
-                Section(header: Text("Directory Information")) {
-                    TextField("Directory Name", text: $directoryName)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Directory Information Section
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Directory Information")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
 
-                    Picker("Type", selection: $selectedType) {
-                        ForEach(DirectoryType.allCases, id: \.self) { type in
-                            HStack {
-                                Image(systemName: type.systemImage)
-                                Text(type.rawValue)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Directory Name")
+                                .font(.subheadline)
+                            TextField("Enter directory name", text: $directoryName)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                        }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Type")
+                                .font(.subheadline)
+                            Picker("Type", selection: $selectedType) {
+                                ForEach(DirectoryType.allCases, id: \.self) { type in
+                                    HStack {
+                                        Image(systemName: type.systemImage)
+                                        Text(type.rawValue)
+                                    }
+                                    .tag(type)
+                                }
                             }
-                            .tag(type)
+                            .pickerStyle(MenuPickerStyle())
+                        }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Directory Path")
+                                .font(.subheadline)
+                            HStack(spacing: 8) {
+                                TextField("Enter or browse for path", text: $directoryPath)
+                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+
+                                Button("Browse...") {
+                                    showingFileImporter = true
+                                }
+                                .buttonStyle(BorderedButtonStyle())
+                            }
                         }
                     }
+                    .padding()
+                    .background(Color(.controlBackgroundColor).opacity(0.5))
+                    .cornerRadius(8)
 
-                    HStack {
-                        TextField("Path", text: $directoryPath)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                    // Application Info Section
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Application")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
 
-                        Button("Browse") {
-                            showingFileImporter = true
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(detectedApp.name)
+                                .font(.body)
+                            Text(detectedApp.bundleIdentifier)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
                     }
+                    .padding()
+                    .background(Color(.controlBackgroundColor).opacity(0.5))
+                    .cornerRadius(8)
                 }
-
-                Section(header: Text("Application")) {
-                    Text(detectedApp.name)
-                        .foregroundColor(.secondary)
-                    Text(detectedApp.bundleIdentifier)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+                .padding()
             }
             .fileImporter(
                 isPresented: $showingFileImporter,
@@ -1124,7 +1194,7 @@ struct AddCustomPathToDetectedAppView: View {
                 }
             }
         }
-        .frame(minWidth: 500, minHeight: 400)
+        .frame(minWidth: 550, idealWidth: 600, maxWidth: 700, minHeight: 450, idealHeight: 500, maxHeight: 600)
     }
 
     private func addCustomPath() {
