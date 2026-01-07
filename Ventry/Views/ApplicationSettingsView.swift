@@ -241,18 +241,44 @@ struct AddDirectoryView: View {
     let application: Application
     @EnvironmentObject var appState: AppState
     @Environment(\.presentationMode) var presentationMode
-    
+
     @State private var directoryName = ""
     @State private var directoryPath = ""
     @State private var selectedType = DirectoryType.other
     @State private var showingFileImporter = false
-    
+
     var body: some View {
-        NavigationView {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Button("Cancel") {
+                    presentationMode.wrappedValue.dismiss()
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                Spacer()
+
+                Text("Add Custom Directory")
+                    .font(.title2)
+                    .fontWeight(.bold)
+
+                Spacer()
+
+                Button("Add") {
+                    addDirectory()
+                }
+                .buttonStyle(PlainButtonStyle())
+                .disabled(directoryName.isEmpty || directoryPath.isEmpty)
+            }
+            .padding()
+
+            Divider()
+
+            // Form content
             Form {
                 Section(header: Text("Directory Information")) {
                     TextField("Directory Name", text: $directoryName)
-                    
+
                     Picker("Type", selection: $selectedType) {
                         ForEach(DirectoryType.allCases, id: \.self) { type in
                             HStack {
@@ -262,38 +288,21 @@ struct AddDirectoryView: View {
                             .tag(type)
                         }
                     }
-                    
+
                     HStack {
                         TextField("Path", text: $directoryPath)
-                        
+
                         Button("Browse") {
                             showingFileImporter = true
                         }
                     }
                 }
-                
+
                 Section(header: Text("Application")) {
                     Text(application.name)
                         .foregroundColor(.secondary)
                 }
             }
-            .navigationTitle("Add Directory")
-            #if os(macOS)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                }
-                
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
-                        addDirectory()
-                    }
-                    .disabled(directoryName.isEmpty || directoryPath.isEmpty)
-                }
-            }
-            #endif
             .fileImporter(
                 isPresented: $showingFileImporter,
                 allowedContentTypes: [.folder],
@@ -312,6 +321,7 @@ struct AddDirectoryView: View {
                 }
             }
         }
+        .frame(minWidth: 500, minHeight: 400)
     }
     
     private func addDirectory() {
@@ -405,10 +415,10 @@ struct ApplicationScannerView: View {
                 }
                 Spacer()
             } else if detectedApplications.isEmpty {
-                // Show loaded apps with scan buttons
+                // Show only supported apps
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        Text("Found \(appState.loadedApps.count) applications on your system")
+                        Text("Found \(supportedAppsCount) supported application\(supportedAppsCount == 1 ? "" : "s")")
                             .font(.headline)
                             .padding(.horizontal)
                             .padding(.top)
@@ -424,12 +434,12 @@ struct ApplicationScannerView: View {
                                 if selectedAppBundles.count == supportedAppsCount {
                                     selectedAppBundles.removeAll()
                                 } else {
-                                    selectedAppBundles = Set(appState.loadedApps.filter { $0.isSupported }.map { $0.bundlePath })
+                                    selectedAppBundles = Set(supportedApps.map { $0.bundlePath })
                                 }
                             }) {
                                 HStack {
                                     Image(systemName: selectedAppBundles.count == supportedAppsCount ? "checkmark.square.fill" : "square")
-                                    Text("Select All Supported (\(supportedAppsCount))")
+                                    Text("Select All (\(supportedAppsCount))")
                                 }
                             }
                             .buttonStyle(PlainButtonStyle())
@@ -457,9 +467,9 @@ struct ApplicationScannerView: View {
 
                         Divider()
 
-                        // Applications list
+                        // Only show supported applications
                         LazyVStack(spacing: 8) {
-                            ForEach(appState.loadedApps) { app in
+                            ForEach(supportedApps) { app in
                                 LoadedAppRow(
                                     app: app,
                                     isSelected: selectedAppBundles.contains(app.bundlePath),
@@ -489,8 +499,12 @@ struct ApplicationScannerView: View {
         .frame(minWidth: 600, minHeight: 500)
     }
 
+    private var supportedApps: [AppLoader.LoadedApp] {
+        appState.loadedApps.filter { $0.isSupported }
+    }
+
     private var supportedAppsCount: Int {
-        appState.loadedApps.filter { $0.isSupported }.count
+        supportedApps.count
     }
     
     private var selectedDirectoriesCount: Int {
@@ -981,29 +995,6 @@ struct LoadedAppRow: View {
                 }
 
                 Spacer()
-
-                // Supported badge
-                if app.isSupported {
-                    HStack(spacing: 4) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                        Text("Supported")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.green.opacity(0.1))
-                    .cornerRadius(6)
-                } else {
-                    Text("Not Supported")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.secondary.opacity(0.1))
-                        .cornerRadius(6)
-                }
             }
             .padding(.vertical, 8)
             .padding(.horizontal, 12)
@@ -1011,8 +1002,6 @@ struct LoadedAppRow: View {
             .cornerRadius(8)
         }
         .buttonStyle(PlainButtonStyle())
-        .disabled(!app.isSupported)
-        .opacity(app.isSupported ? 1.0 : 0.5)
     }
 }
 

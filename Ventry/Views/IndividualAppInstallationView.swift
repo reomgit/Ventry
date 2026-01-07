@@ -226,79 +226,80 @@ struct CustomPathsAdditionView: View {
     @State private var currentPathBeingEdited: Int?
 
     var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                // Header
-                VStack(spacing: 8) {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Button("Cancel") {
+                    presentationMode.wrappedValue.dismiss()
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                Spacer()
+
+                VStack(spacing: 4) {
                     Text("Add Custom Paths")
-                        .font(.largeTitle)
+                        .font(.title2)
                         .fontWeight(.bold)
 
                     Text("for \(detectedApp.name)")
-                        .font(.headline)
+                        .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
-                .padding()
 
-                Divider()
+                Spacer()
 
-                // Custom paths list
-                if customPaths.isEmpty {
-                    Spacer()
-                    VStack(spacing: 16) {
-                        Image(systemName: "folder.badge.plus")
-                            .font(.system(size: 48))
-                            .foregroundColor(.accentColor)
-
-                        Text("No custom paths added")
-                            .font(.title2)
-                            .fontWeight(.medium)
-
-                        Text("Add custom directory paths that you want to track for this application.")
-                            .multilineTextAlignment(.center)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal)
-                    }
-                    Spacer()
-                } else {
-                    List {
-                        ForEach(customPaths.indices, id: \.self) { index in
-                            CustomPathRowView(
-                                customPath: $customPaths[index],
-                                onRemove: {
-                                    customPaths.remove(at: index)
-                                }
-                            )
-                        }
-                    }
-                    .listStyle(PlainListStyle())
+                Button("Done") {
+                    completeCustomPaths()
                 }
-
-                // Add path button
-                HStack {
-                    Button("Add Path") {
-                        customPaths.append(CustomPath(name: "", path: "", type: .other))
-                    }
-                    .buttonStyle(SecondaryButtonStyle())
-
-                    Spacer()
-                }
-                .padding()
+                .buttonStyle(PlainButtonStyle())
+                .disabled(customPaths.filter { !$0.name.isEmpty && !$0.path.isEmpty }.isEmpty)
             }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                }
+            .padding()
 
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        completeCustomPaths()
-                    }
-                    .disabled(customPaths.filter { !$0.name.isEmpty && !$0.path.isEmpty }.isEmpty)
+            Divider()
+
+            // Custom paths list
+            if customPaths.isEmpty {
+                Spacer()
+                VStack(spacing: 16) {
+                    Image(systemName: "folder.badge.plus")
+                        .font(.system(size: 48))
+                        .foregroundColor(.accentColor)
+
+                    Text("No custom paths added")
+                        .font(.title2)
+                        .fontWeight(.medium)
+
+                    Text("Add custom directory paths that you want to track for this application.")
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal)
                 }
+                Spacer()
+            } else {
+                List {
+                    ForEach(customPaths.indices, id: \.self) { index in
+                        CustomPathRowView(
+                            customPath: $customPaths[index],
+                            onRemove: {
+                                customPaths.remove(at: index)
+                            }
+                        )
+                    }
+                }
+                .listStyle(PlainListStyle())
             }
+
+            // Add path button
+            HStack {
+                Button("Add Path") {
+                    customPaths.append(CustomPath(name: "", path: "", type: .other))
+                }
+                .buttonStyle(SecondaryButtonStyle())
+
+                Spacer()
+            }
+            .padding()
         }
         .frame(minWidth: 500, minHeight: 400)
     }
