@@ -26,7 +26,7 @@ struct ApplicationSettingsView: View {
                             if appState.isScanning {
                                 ProgressView()
                                     .scaleEffect(0.8)
-v                                Text("Scanning...")
+                                Text("Scanning...")
                             } else {
                                 Image(systemName: "arrow.clockwise")
                                 Text("Scan Apps")
