@@ -3,7 +3,6 @@ import Combine
 
 class AppState: ObservableObject {
     @Published var collections: [Collection] = []
-    @Published var selectedCollection: Collection? = nil
     @Published var starredItems: [StarredItem] = []
     @Published var regularFolders: [RegularFolder] = RegularFolder.allCases
     @Published var applications: [Application] = []
@@ -11,7 +10,11 @@ class AppState: ObservableObject {
     @Published var isLoadingApplications = false
     @Published var showingMultipleInstallationsSheet = false
     @Published var pendingInstallationSelection: (String, [ApplicationManager.DetectedApplication])? = nil
-    
+
+    // New: Store loaded apps before scanning
+    @Published var loadedApps: [AppLoader.LoadedApp] = []
+    @Published var isLoadingApps = false
+
     private let applicationManager = ApplicationManager()
     private var cancellables = Set<AnyCancellable>()
 
@@ -23,7 +26,22 @@ class AppState: ObservableObject {
     init() {
         setupBindings()
         Task {
-            await initializeApplications()
+            await loadApplicationsFromSystem()
+        }
+    }
+
+    /// Loads all .app files from /Applications folder (runs on app launch)
+    func loadApplicationsFromSystem() async {
+        await MainActor.run {
+            isLoadingApps = true
+        }
+
+        let supportedApps = applicationManager.getSupportedApplications()
+        let apps = await AppLoader.shared.loadAllApplications(supportedApps: supportedApps)
+
+        await MainActor.run {
+            self.loadedApps = apps
+            self.isLoadingApps = false
         }
     }
     
@@ -137,19 +155,11 @@ class AppState: ObservableObject {
     func getAvailableApplications() async -> [String] {
         return await applicationManager.getAvailableApplications()
     }
-    
-    func selectCollection(_ collection: Collection) {
-        selectedCollection = collection
-    }
-    
     func addCollection(_ collection: Collection) {
         collections.append(collection)
     }
     
     func removeCollection(withId id: UUID) {
         collections.removeAll { $0.id == id }
-        if selectedCollection?.id == id {
-            selectedCollection = collections.first
-        }
     }
 }

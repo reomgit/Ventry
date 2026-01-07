@@ -38,6 +38,7 @@ struct ApplicationSettingsView: View {
                         .foregroundColor(.white)
                         .cornerRadius(8)
                     }
+                    .buttonStyle(PlainButtonStyle())
                     .disabled(appState.isScanning)
                     
                     Button(action: {
@@ -53,6 +54,7 @@ struct ApplicationSettingsView: View {
                         .foregroundColor(.primary)
                         .cornerRadius(8)
                     }
+                    .buttonStyle(PlainButtonStyle())
                 }
             }
             .padding()
@@ -158,6 +160,7 @@ struct SettingsApplicationRowView: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.secondary)
                 }
+                .buttonStyle(PlainButtonStyle())
             }
             
             // Directories list (when expanded)
@@ -182,6 +185,7 @@ struct SettingsApplicationRowView: View {
                         .foregroundColor(.accentColor)
                         .padding(.vertical, 8)
                     }
+                    .buttonStyle(PlainButtonStyle())
                 }
                 .padding(.leading, 16)
             }
@@ -325,10 +329,11 @@ struct AddDirectoryView: View {
 struct ApplicationScannerView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.presentationMode) var presentationMode
-    
+
     @State private var detectedApplications: [DetectedApplication] = []
-    @State private var hasScanned = false
-    
+    @State private var selectedAppBundles: Set<String> = []
+    @State private var isScanning = false
+
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -336,16 +341,16 @@ struct ApplicationScannerView: View {
                 Button("Cancel") {
                     presentationMode.wrappedValue.dismiss()
                 }
-                
+
                 Spacer()
-                
-                Text("Scan for Applications")
+
+                Text("Applications")
                     .font(.largeTitle)
                     .fontWeight(.bold)
-                
+
                 Spacer()
-                
-                if hasScanned && !detectedApplications.isEmpty {
+
+                if !detectedApplications.isEmpty {
                     Button(action: addSelectedApplications) {
                         HStack {
                             Image(systemName: "checkmark")
@@ -357,84 +362,122 @@ struct ApplicationScannerView: View {
                         .foregroundColor(.white)
                         .cornerRadius(8)
                     }
+                    .buttonStyle(PlainButtonStyle())
                     .disabled(selectedDirectoriesCount == 0)
                 } else {
                     // Empty spacer to balance the Cancel button
                     Button("") { }
                         .opacity(0)
                         .disabled(true)
+                        .buttonStyle(PlainButtonStyle())
                 }
             }
             .padding()
-            
+
             Divider()
-            
-            if appState.isScanning {
+
+            if appState.isLoadingApps {
                 Spacer()
                 VStack(spacing: 16) {
-                    ProgressView(value: appState.scanProgress)
-                        .progressViewStyle(LinearProgressViewStyle())
-                        .frame(maxWidth: 300)
-                    
-                    Text("Scanning applications...")
+                    ProgressView()
+                        .scaleEffect(1.5)
+
+                    Text("Loading applications...")
                         .font(.headline)
-                    
-                    Text("\(Int(appState.scanProgress * 100))% complete")
-                        .foregroundColor(.secondary)
                 }
                 .padding()
                 Spacer()
-            } else if !hasScanned {
-                Spacer()
-                VStack(spacing: 16) {
-                    Image(systemName: "magnifyingglass.circle.fill")
-                        .font(.system(size: 64))
-                        .foregroundColor(.accentColor)
-                    
-                    Text("Find Supported Applications")
-                        .font(.title)
-                        .fontWeight(.bold)
-                    
-                    Text("Scan your Applications folder for supported applications and select which directories to track.")
-                        .multilineTextAlignment(.center)
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal)
-                }
-                
-                Button(action: scanApplications) {
-                    Text("Start Scan")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: 200)
-                        .padding()
-                        .background(Color.accentColor)
-                        .cornerRadius(12)
-                }
-                Spacer()
-            } else if detectedApplications.isEmpty {
+            } else if appState.loadedApps.isEmpty {
                 Spacer()
                 VStack(spacing: 16) {
                     Image(systemName: "app.dashed")
                         .font(.system(size: 48))
                         .foregroundColor(.secondary)
-                    
-                    Text("No Supported Applications Found")
+
+                    Text("No Applications Found")
                         .font(.title2)
                         .fontWeight(.medium)
-                    
-                    Text("No supported applications were found in your Applications folder.")
+
+                    Text("No applications were found in your Applications folder.")
                         .multilineTextAlignment(.center)
                         .foregroundColor(.secondary)
                         .padding(.horizontal)
-                    
-                    Button("Scan Again") {
-                        hasScanned = false
-                    }
-                    .padding(.top)
                 }
                 Spacer()
+            } else if detectedApplications.isEmpty {
+                // Show loaded apps with scan buttons
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Found \(appState.loadedApps.count) applications on your system")
+                            .font(.headline)
+                            .padding(.horizontal)
+                            .padding(.top)
+
+                        Text("Select applications to scan their directories")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal)
+
+                        // Filter options
+                        HStack {
+                            Button(action: {
+                                if selectedAppBundles.count == supportedAppsCount {
+                                    selectedAppBundles.removeAll()
+                                } else {
+                                    selectedAppBundles = Set(appState.loadedApps.filter { $0.isSupported }.map { $0.bundlePath })
+                                }
+                            }) {
+                                HStack {
+                                    Image(systemName: selectedAppBundles.count == supportedAppsCount ? "checkmark.square.fill" : "square")
+                                    Text("Select All Supported (\(supportedAppsCount))")
+                                }
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .padding(.horizontal)
+
+                            Spacer()
+
+                            if selectedAppBundles.count > 0 {
+                                Button(action: scanSelectedApplications) {
+                                    HStack {
+                                        Image(systemName: "magnifyingglass")
+                                        Text("Scan \(selectedAppBundles.count) App\(selectedAppBundles.count == 1 ? "" : "s")")
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                    .background(Color.accentColor)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(8)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                .padding(.horizontal)
+                            }
+                        }
+                        .padding(.vertical, 8)
+
+                        Divider()
+
+                        // Applications list
+                        LazyVStack(spacing: 8) {
+                            ForEach(appState.loadedApps) { app in
+                                LoadedAppRow(
+                                    app: app,
+                                    isSelected: selectedAppBundles.contains(app.bundlePath),
+                                    onToggle: {
+                                        if selectedAppBundles.contains(app.bundlePath) {
+                                            selectedAppBundles.remove(app.bundlePath)
+                                        } else {
+                                            selectedAppBundles.insert(app.bundlePath)
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                }
             } else {
-                // Applications list with toggleable directories
+                // Show scanned applications with directory toggles
                 List {
                     ForEach($detectedApplications) { $app in
                         DetectedApplicationRowView(detectedApp: $app)
@@ -445,66 +488,55 @@ struct ApplicationScannerView: View {
         }
         .frame(minWidth: 600, minHeight: 500)
     }
+
+    private var supportedAppsCount: Int {
+        appState.loadedApps.filter { $0.isSupported }.count
+    }
     
     private var selectedDirectoriesCount: Int {
         detectedApplications.reduce(0) { total, app in
             total + app.availableDirectories.filter { $0.isSelected }.count
         }
     }
-    
-    private func scanApplications() {
+
+    private func scanSelectedApplications() {
         Task {
             await performScan()
         }
     }
-    
+
     private func performScan() async {
-        detectedApplications = await scanForDetectedApplications()
         await MainActor.run {
-            hasScanned = true
+            isScanning = true
         }
-    }
-    
-    private func scanForDetectedApplications() async -> [DetectedApplication] {
+
         var detected: [DetectedApplication] = []
-        let applicationsPath = "/Applications"
-        
-        do {
-            let applicationURLs = try FileManager.default.contentsOfDirectory(
-                at: URL(fileURLWithPath: applicationsPath),
-                includingPropertiesForKeys: [.isApplicationKey],
-                options: [.skipsHiddenFiles]
-            ).filter { url in
-                (try? url.resourceValues(forKeys: [.isApplicationKey]))?.isApplication == true
-            }
-            
-            for appURL in applicationURLs {
-                if let bundleIdentifier = getBundleIdentifier(for: appURL),
-                   let supportedApp = appState.applicationManagerAccess.getSupportedApplication(for: bundleIdentifier) {
 
-                    let appName = appURL.deletingPathExtension().lastPathComponent
-                    let availableDirectories = createAvailableDirectories(from: supportedApp, appName: appName, appURL: appURL)
+        // Get selected apps
+        let selectedApps = appState.loadedApps.filter { selectedAppBundles.contains($0.bundlePath) }
 
-                    if !availableDirectories.isEmpty {
-                        let detectedApp = DetectedApplication(
-                            name: appName,
-                            bundleIdentifier: bundleIdentifier,
-                            availableDirectories: availableDirectories
-                        )
-                        detected.append(detectedApp)
-                    }
+        for loadedApp in selectedApps where loadedApp.isSupported {
+            if let bundleIdentifier = loadedApp.bundleIdentifier,
+               let supportedApp = appState.applicationManagerAccess.getSupportedApplication(for: bundleIdentifier) {
+
+                let appURL = URL(fileURLWithPath: loadedApp.bundlePath)
+                let availableDirectories = createAvailableDirectories(from: supportedApp, appName: loadedApp.name, appURL: appURL)
+
+                if !availableDirectories.isEmpty {
+                    let detectedApp = DetectedApplication(
+                        name: loadedApp.name,
+                        bundleIdentifier: bundleIdentifier,
+                        availableDirectories: availableDirectories
+                    )
+                    detected.append(detectedApp)
                 }
             }
-        } catch {
-            print("Error scanning applications: \(error)")
         }
-        
-        return detected
-    }
-    
-    private func getBundleIdentifier(for appURL: URL) -> String? {
-        guard let bundle = Bundle(url: appURL) else { return nil }
-        return bundle.bundleIdentifier
+
+        await MainActor.run {
+            self.detectedApplications = detected
+            self.isScanning = false
+        }
     }
     
     private func createAvailableDirectories(from supportedApp: SupportedApplication, appName: String, appURL: URL) -> [AvailableDirectory] {
@@ -609,6 +641,7 @@ struct DetectedApplicationRowView: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.secondary)
                 }
+                .buttonStyle(PlainButtonStyle())
             }
             
             // Directories list (when expanded)
@@ -665,6 +698,7 @@ struct ManualMultipleAppSelectionView: View {
                     Button("") { }
                         .opacity(0)
                         .disabled(true)
+                        .buttonStyle(PlainButtonStyle())
                 }
             }
             .padding()
@@ -705,6 +739,7 @@ struct ManualMultipleAppSelectionView: View {
                     .padding()
                     .background(Color.accentColor)
                     .cornerRadius(12)
+                    .buttonStyle(PlainButtonStyle())
                 }
                 Spacer()
             } else if !detectedApps.isEmpty {
@@ -902,6 +937,82 @@ struct MultipleAppRowView: View {
             .buttonStyle(PlainButtonStyle())
         }
         .padding(.vertical, 8)
+    }
+}
+
+// MARK: - LoadedAppRow View
+struct LoadedAppRow: View {
+    let app: AppLoader.LoadedApp
+    let isSelected: Bool
+    let onToggle: () -> Void
+
+    var body: some View {
+        Button(action: onToggle) {
+            HStack(spacing: 12) {
+                // Checkbox
+                Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                    .font(.title3)
+                    .foregroundColor(isSelected ? .accentColor : .secondary)
+
+                // App icon
+                if let icon = AppLoader.shared.getAppIcon(for: app.bundlePath) {
+                    Image(nsImage: icon)
+                        .resizable()
+                        .frame(width: 32, height: 32)
+                        .cornerRadius(6)
+                } else {
+                    Image(systemName: "app")
+                        .font(.title2)
+                        .frame(width: 32, height: 32)
+                        .foregroundColor(.secondary)
+                }
+
+                // App info
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(app.name)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    if let bundleID = app.bundleIdentifier {
+                        Text(bundleID)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Spacer()
+
+                // Supported badge
+                if app.isSupported {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                        Text("Supported")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.green.opacity(0.1))
+                    .cornerRadius(6)
+                } else {
+                    Text("Not Supported")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.secondary.opacity(0.1))
+                        .cornerRadius(6)
+                }
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .background(isSelected ? Color.accentColor.opacity(0.1) : Color.clear)
+            .cornerRadius(8)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .disabled(!app.isSupported)
+        .opacity(app.isSupported ? 1.0 : 0.5)
     }
 }
 

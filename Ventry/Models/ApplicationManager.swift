@@ -32,6 +32,11 @@ final class ApplicationManager: ObservableObject {
     var supportedApplications: [String: SupportedApplication] {
         return _supportedApplications
     }
+
+    // Get supported applications dictionary for AppLoader
+    func getSupportedApplications() -> [String: SupportedApplication] {
+        return _supportedApplications
+    }
     
     init() {
         loadSupportedApplications()
