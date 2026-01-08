@@ -14,16 +14,16 @@ struct ContentView: View {
         GeometryReader { geometry in
             NavigationSplitView {
                 SidebarView()
+                    .navigationSplitViewColumnWidth(
+                        min: 200,
+                        ideal: min(250, geometry.size.width * 0.35),
+                        max: max(250, min(300, geometry.size.width * 0.35))
+                    )
             } detail: {
                 Text("Choose a collection or shortcut")
                     .foregroundColor(.secondary)
                     .font(.title2)
             }
-            .navigationSplitViewColumnWidth(
-                min: 200,
-                ideal: min(250, geometry.size.width * 0.35),
-                max: max(250, min(300, geometry.size.width * 0.35))
-            )
             .navigationSplitViewStyle(.balanced)
         }
         .sheet(isPresented: $appState.showingMultipleInstallationsSheet) {
