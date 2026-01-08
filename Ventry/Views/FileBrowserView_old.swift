@@ -4,13 +4,15 @@ import UniformTypeIdentifiers
 import AppKit
 #endif
 
-struct FileBrowserView: View {
+// Legacy FileBrowserView - Retained for reference
+// This is the original simple implementation before the full folder browser was added
+struct FileBrowserView_Legacy: View {
     let title: String
     let path: String
-    
-    @State private var entries: [FileBrowserEntry] = []
+
+    @State private var entries: [FileBrowserEntry_Legacy] = []
     @State private var errorMessage: String?
-    
+
     var body: some View {
         List {
             if let errorMessage {
@@ -24,15 +26,15 @@ struct FileBrowserView: View {
                 ForEach(entries) { entry in
                     if entry.isDirectory {
                         NavigationLink(
-                            destination: FileBrowserView(
+                            destination: FileBrowserView_Legacy(
                                 title: entry.displayName,
                                 path: entry.url.path
                             )
                         ) {
-                            FileBrowserRow(entry: entry)
+                            FileBrowserRow_Legacy(entry: entry)
                         }
                     } else {
-                        FileBrowserRow(entry: entry)
+                        FileBrowserRow_Legacy(entry: entry)
                             .contextMenu {
                                 #if os(macOS)
                                 Button("Reveal in Finder") {
@@ -88,26 +90,26 @@ struct FileBrowserView: View {
     }
 }
 
-private struct FileBrowserEntry: Identifiable {
+private struct FileBrowserEntry_Legacy: Identifiable {
     let url: URL
     let isDirectory: Bool
     let contentType: UTType?
-    
+
     var id: URL { url }
-    
+
     var displayName: String {
         url.lastPathComponent
     }
-    
+
     var iconName: String {
         if isDirectory {
             return "folder"
         }
-        
+
         guard let contentType else {
             return "doc"
         }
-        
+
         if contentType.conforms(to: .image) {
             return "photo"
         } else if contentType.conforms(to: .movie) || contentType.conforms(to: .video) {
@@ -119,23 +121,23 @@ private struct FileBrowserEntry: Identifiable {
         } else if contentType.conforms(to: .pdf) || contentType.conforms(to: .text) {
             return "doc.text"
         }
-        
+
         return "doc"
     }
 }
 
-private struct FileBrowserRow: View {
-    let entry: FileBrowserEntry
-    
+private struct FileBrowserRow_Legacy: View {
+    let entry: FileBrowserEntry_Legacy
+
     var body: some View {
         HStack {
             Image(systemName: entry.iconName)
                 .foregroundColor(entry.isDirectory ? .accentColor : .secondary)
                 .frame(width: 20)
-            
+
             Text(entry.displayName)
                 .lineLimit(1)
-            
+
             Spacer()
         }
         .padding(.vertical, 2)
