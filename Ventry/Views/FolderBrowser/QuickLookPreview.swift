@@ -77,7 +77,7 @@ struct QuickLookModifier: ViewModifier {
     @Binding var selectedItems: Set<FolderBrowserItem>
     @State private var showPreview = false
 
-    func body(content: Content) -> View {
+    func body(content: Content) -> some View {
         content
             .background(
                 QuickLookPreview(
