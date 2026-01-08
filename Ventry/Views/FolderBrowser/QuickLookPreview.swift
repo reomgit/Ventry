@@ -1,0 +1,106 @@
+import SwiftUI
+import Quartz
+
+/// Quick Look preview panel wrapper for SwiftUI
+struct QuickLookPreview: NSViewRepresentable {
+    let urls: [URL]
+    @Binding var isPresented: Bool
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        if isPresented {
+            DispatchQueue.main.async {
+                showQuickLook(from: nsView)
+            }
+        }
+    }
+
+    private func showQuickLook(from view: NSView) {
+        guard let window = view.window else { return }
+
+        // Get or create the Quick Look panel
+        guard QLPreviewPanel.sharedPreviewPanelExists(),
+              let panel = QLPreviewPanel.shared() else {
+            return
+        }
+
+        // Make sure we have a coordinator to act as data source
+        if panel.dataSource == nil || panel.delegate == nil {
+            let coordinator = QuickLookCoordinator(urls: urls, isPresented: $isPresented)
+            panel.dataSource = coordinator
+            panel.delegate = coordinator
+
+            // Keep coordinator alive
+            objc_setAssociatedObject(panel, "coordinator", coordinator, .OBJC_ASSOCIATION_RETAIN)
+        }
+
+        if !panel.isVisible {
+            panel.makeKeyAndOrderFront(nil)
+            panel.center()
+        }
+    }
+}
+
+/// Coordinator to handle Quick Look data source and delegate
+class QuickLookCoordinator: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDelegate {
+    let urls: [URL]
+    @Binding var isPresented: Bool
+
+    init(urls: [URL], isPresented: Binding<Bool>) {
+        self.urls = urls
+        self._isPresented = isPresented
+        super.init()
+    }
+
+    // MARK: - QLPreviewPanelDataSource
+    func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int {
+        return urls.count
+    }
+
+    func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> QLPreviewItem! {
+        return urls[index] as QLPreviewItem
+    }
+
+    // MARK: - QLPreviewPanelDelegate
+    func previewPanelDidClose(_ panel: QLPreviewPanel!) {
+        isPresented = false
+    }
+}
+
+/// View modifier to enable Quick Look preview with spacebar
+struct QuickLookModifier: ViewModifier {
+    let items: [FolderBrowserItem]
+    @Binding var selectedItems: Set<FolderBrowserItem>
+    @State private var showPreview = false
+
+    func body(content: Content) -> View {
+        content
+            .background(
+                QuickLookPreview(
+                    urls: Array(selectedItems).map { $0.url },
+                    isPresented: $showPreview
+                )
+                .frame(width: 0, height: 0)
+                .opacity(0)
+            )
+            .onKeyPress(.space) {
+                if !selectedItems.isEmpty {
+                    showPreview.toggle()
+                }
+                return .handled
+            }
+    }
+}
+
+extension View {
+    func quickLookPreview(
+        items: [FolderBrowserItem],
+        selectedItems: Binding<Set<FolderBrowserItem>>
+    ) -> some View {
+        modifier(QuickLookModifier(items: items, selectedItems: selectedItems))
+    }
+}

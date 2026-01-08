@@ -67,7 +67,7 @@ final class ApplicationManager: ObservableObject {
             storedApplications[index] = app
         } else {
             // If the app isn't stored yet, create a placeholder Application so the directory persists.
-            let placeholder = Application(name: bundleIdentifier, bundleIdentifier: bundleIdentifier, directories: [directory])
+            let placeholder = Application(name: bundleIdentifier, bundleIdentifier: bundleIdentifier, bundlePath: nil, directories: [directory])
             storedApplications.append(placeholder)
         }
     }
@@ -87,6 +87,7 @@ final class ApplicationManager: ObservableObject {
         let application = Application(
             name: selectedApp.name,
             bundleIdentifier: selectedApp.bundleIdentifier,
+            bundlePath: selectedApp.appURL.path,
             directories: []
         )
         

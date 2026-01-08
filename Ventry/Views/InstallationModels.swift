@@ -8,6 +8,7 @@ struct DetectedApplication: Identifiable {
     let id = UUID()
     let name: String
     let bundleIdentifier: String
+    let bundlePath: String
     var availableDirectories: [AvailableDirectory]
 }
 

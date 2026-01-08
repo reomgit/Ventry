@@ -120,9 +120,17 @@ struct SupportedAppInstallationView: View {
         VStack(spacing: 20) {
             // App info
             VStack(spacing: 12) {
-                Image(systemName: "app.badge.checkmark")
-                    .font(.system(size: 48))
-                    .foregroundColor(.accentColor)
+                // App icon
+                if let icon = AppLoader.shared.getAppIcon(for: detectedApp.bundlePath) {
+                    Image(nsImage: icon)
+                        .resizable()
+                        .frame(width: 64, height: 64)
+                        .cornerRadius(12)
+                } else {
+                    Image(systemName: "app.badge.checkmark")
+                        .font(.system(size: 48))
+                        .foregroundColor(.accentColor)
+                }
 
                 VStack(spacing: 4) {
                     Text(detectedApp.name)
@@ -164,9 +172,21 @@ struct UnsupportedAppInstallationView: View {
         VStack(spacing: 20) {
             // App info
             VStack(spacing: 12) {
-                Image(systemName: "app.badge.questionmark")
-                    .font(.system(size: 48))
-                    .foregroundColor(.orange)
+                // App icon
+                if let icon = AppLoader.shared.getAppIcon(for: detectedApp.bundlePath) {
+                    Image(nsImage: icon)
+                        .resizable()
+                        .frame(width: 64, height: 64)
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.orange, lineWidth: 2)
+                        )
+                } else {
+                    Image(systemName: "app.badge.questionmark")
+                        .font(.system(size: 48))
+                        .foregroundColor(.orange)
+                }
 
                 VStack(spacing: 4) {
                     Text(detectedApp.name)
@@ -236,14 +256,31 @@ struct CustomPathsAdditionView: View {
 
                 Spacer()
 
-                VStack(spacing: 4) {
-                    Text("Add Custom Paths")
-                        .font(.title2)
-                        .fontWeight(.bold)
+                VStack(spacing: 8) {
+                    HStack(spacing: 12) {
+                        // App icon
+                        if let icon = AppLoader.shared.getAppIcon(for: detectedApp.bundlePath) {
+                            Image(nsImage: icon)
+                                .resizable()
+                                .frame(width: 32, height: 32)
+                                .cornerRadius(6)
+                        } else {
+                            Image(systemName: "app")
+                                .font(.title2)
+                                .frame(width: 32, height: 32)
+                                .foregroundColor(.secondary)
+                        }
 
-                    Text("for \(detectedApp.name)")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        VStack(spacing: 4) {
+                            Text("Add Custom Paths")
+                                .font(.title2)
+                                .fontWeight(.bold)
+
+                            Text("for \(detectedApp.name)")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
 
                 Spacer()
@@ -392,6 +429,7 @@ struct CustomPathRowView: View {
         detectedApp: DetectedApplication(
             name: "Test App",
             bundleIdentifier: "com.test.app",
+            bundlePath: "/Applications/Test App.app",
             availableDirectories: []
         ),
         isSupported: false,

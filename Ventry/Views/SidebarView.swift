@@ -21,8 +21,30 @@ struct SidebarView: View {
             
             // Collections Section
             Section("Collections") {
-                ForEach(appState.regularFolders, id: \.self) { folder in
-                    RegularFolderRowView(folder: folder)
+                if appState.regularFolders.isEmpty && appState.collections.isEmpty {
+                    Text("No collections available")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .italic()
+                } else {
+                    ForEach(appState.regularFolders, id: \.self) { folder in
+                        NavigationLink(destination: FileBrowserView(title: folder.rawValue, path: folder.defaultPath)) {
+                            RegularFolderRowView(folder: folder)
+                        }
+                        .simultaneousGesture(TapGesture().onEnded {
+                            folder.ensureDirectoryExists()
+                        })
+                    }
+                    
+                    if !appState.regularFolders.isEmpty && !appState.collections.isEmpty {
+                        Divider()
+                    }
+                    
+                    ForEach(appState.collections) { collection in
+                        NavigationLink(destination: AssetGridView(collection: collection)) {
+                            CollectionRowView(collection: collection)
+                        }
+                    }
                 }
             }
             
@@ -74,17 +96,6 @@ struct SidebarView: View {
                 } else {
                     ForEach(appState.userTags) { tag in
                         UserTagRowView(tag: tag)
-                    }
-                }
-            }
-            
-            // Software Directories Section
-            if !appState.applications.isEmpty {
-                ForEach(appState.applications) { application in
-                    Section("\(application.name) - Directories") {
-                        ForEach(application.directories) { directory in
-                            DirectoryRowView(directory: directory)
-                        }
                     }
                 }
             }
@@ -179,29 +190,37 @@ struct RegularFolderRowView: View {
 
 struct ApplicationRowView: View {
     let application: Application
-    
+
     var body: some View {
         HStack {
-            // App icon placeholder
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.gray.opacity(0.3))
-                .frame(width: 24, height: 24)
-                .overlay(
-                    Image(systemName: "app.fill")
-                        .foregroundColor(.white)
-                        .font(.caption)
-                )
-            
+            // App icon
+            if let bundlePath = application.bundlePath,
+               let icon = AppLoader.shared.getAppIcon(for: bundlePath) {
+                Image(nsImage: icon)
+                    .resizable()
+                    .frame(width: 24, height: 24)
+                    .cornerRadius(5)
+            } else {
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(Color.gray.opacity(0.3))
+                    .frame(width: 24, height: 24)
+                    .overlay(
+                        Image(systemName: "app.fill")
+                            .foregroundColor(.white)
+                            .font(.caption)
+                    )
+            }
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(application.name)
                     .font(.body)
                     .lineLimit(1)
-                
+
                 Text("\(application.directories.count) directories")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            
+
             Spacer()
         }
         .padding(.vertical, 2)
@@ -230,57 +249,5 @@ struct UserTagRowView: View {
             Spacer()
         }
         .padding(.vertical, 2)
-    }
-}
-
-struct DirectoryRowView: View {
-    let directory: AppDirectory
-    @EnvironmentObject var appState: AppState
-    @State private var showingCreateCollection = false
-    
-    var body: some View {
-        HStack {
-            Image(systemName: directory.type.systemImage)
-                .foregroundColor(.secondary)
-                .font(.title3)
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(directory.name)
-                    .font(.body)
-                    .lineLimit(1)
-                
-                Text(directory.path)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-            }
-            
-            Spacer()
-            
-            Button(action: {
-                createCollectionFromDirectory()
-            }) {
-                Image(systemName: "plus.circle")
-                    .foregroundColor(.accentColor)
-                    .font(.caption)
-            }
-            .buttonStyle(PlainButtonStyle())
-            .help("Create collection from this directory")
-        }
-        .padding(.vertical, 2)
-        .alert("Creating Collection", isPresented: $showingCreateCollection) {
-            // Alert will be dismissed automatically
-        } message: {
-            Text("Scanning directory to create collection...")
-        }
-    }
-    
-    private func createCollectionFromDirectory() {
-        showingCreateCollection = true
-        
-        DirectoryScanner.shared.createCollectionFromDirectory(directory) { collection in
-            appState.addCollection(collection)
-            showingCreateCollection = false
-        }
     }
 }

@@ -39,13 +39,15 @@ struct Application: Identifiable, Codable, Equatable {
     let name: String
     let bundleIdentifier: String
     let iconName: String?
+    let bundlePath: String?
     var directories: [AppDirectory]
-    
-    init(name: String, bundleIdentifier: String, iconName: String? = nil, directories: [AppDirectory] = []) {
+
+    init(name: String, bundleIdentifier: String, iconName: String? = nil, bundlePath: String? = nil, directories: [AppDirectory] = []) {
         self.id = UUID()
         self.name = name
         self.bundleIdentifier = bundleIdentifier
         self.iconName = iconName
+        self.bundlePath = bundlePath
         self.directories = directories
     }
     
@@ -160,7 +162,7 @@ enum RegularFolder: String, CaseIterable {
     case fonts = "Fonts"
     case designAssets = "Design Assets"
     case downloads = "Downloads"
-    
+
     var systemImage: String {
         switch self {
         case .fonts:
@@ -171,16 +173,24 @@ enum RegularFolder: String, CaseIterable {
             return "arrow.down.circle"
         }
     }
-    
+
     var defaultPath: String {
         let homeDirectory = FileManager.default.homeDirectoryForCurrentUser.path
         switch self {
         case .fonts:
             return "\(homeDirectory)/Library/Fonts"
         case .designAssets:
-            return "\(homeDirectory)/Documents/Design Assets"
+            return "\(homeDirectory)/Documents/Ventry/Design Assets"
         case .downloads:
             return "\(homeDirectory)/Downloads"
+        }
+    }
+
+    /// Ensures the directory exists, creating it if necessary
+    func ensureDirectoryExists() {
+        let path = defaultPath
+        if !FileManager.default.fileExists(atPath: path) {
+            try? FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true, attributes: nil)
         }
     }
 }

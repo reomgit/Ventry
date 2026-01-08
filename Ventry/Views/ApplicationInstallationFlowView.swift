@@ -53,6 +53,7 @@ struct ApplicationInstallationFlowView: View {
         let application = Application(
             name: configuredApp.name,
             bundleIdentifier: configuredApp.bundleIdentifier,
+            bundlePath: configuredApp.bundlePath,
             directories: selectedDirectories
         )
 
@@ -156,11 +157,13 @@ struct InstallationCompleteView: View {
             DetectedApplication(
                 name: "Test App 1",
                 bundleIdentifier: "com.test.app1",
+                bundlePath: "/Applications/Test App 1.app",
                 availableDirectories: []
             ),
             DetectedApplication(
                 name: "Test App 2",
                 bundleIdentifier: "com.test.app2",
+                bundlePath: "/Applications/Test App 2.app",
                 availableDirectories: []
             )
         ],

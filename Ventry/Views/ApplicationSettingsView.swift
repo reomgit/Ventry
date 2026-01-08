@@ -129,16 +129,30 @@ struct SettingsApplicationRowView: View {
         VStack(alignment: .leading, spacing: 12) {
             // Application header
             HStack {
+                // App icon
+                if let bundlePath = application.bundlePath,
+                   let icon = AppLoader.shared.getAppIcon(for: bundlePath) {
+                    Image(nsImage: icon)
+                        .resizable()
+                        .frame(width: 40, height: 40)
+                        .cornerRadius(8)
+                } else {
+                    Image(systemName: "app")
+                        .font(.title)
+                        .frame(width: 40, height: 40)
+                        .foregroundColor(.secondary)
+                }
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text(application.name)
                         .font(.headline)
                         .fontWeight(.medium)
-                    
+
                     Text(application.bundleIdentifier)
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                
+
                 Spacer()
                 
                 // Directory count badge
@@ -356,9 +370,10 @@ struct AddDirectoryView: View {
                 }
             }
         }
+        .background(Color(.windowBackgroundColor))
         .frame(minWidth: 550, idealWidth: 600, maxWidth: 700, minHeight: 450, idealHeight: 500, maxHeight: 600)
     }
-    
+
     private func addDirectory() {
         let directory = AppDirectory(
             name: directoryName,
@@ -575,6 +590,7 @@ struct ApplicationScannerView: View {
                     let detectedApp = DetectedApplication(
                         name: loadedApp.name,
                         bundleIdentifier: bundleIdentifier,
+                        bundlePath: loadedApp.bundlePath,
                         availableDirectories: availableDirectories
                     )
                     detected.append(detectedApp)
@@ -626,21 +642,22 @@ struct ApplicationScannerView: View {
             let selectedDirectories = detectedApp.availableDirectories
                 .filter { $0.isSelected }
                 .map { AppDirectory(name: $0.name, path: $0.path, type: $0.type) }
-            
+
             if !selectedDirectories.isEmpty {
                 let application = Application(
                     name: detectedApp.name,
                     bundleIdentifier: detectedApp.bundleIdentifier,
+                    bundlePath: detectedApp.bundlePath,
                     directories: selectedDirectories
                 )
-                
+
                 // Add to app state if not already exists
                 if !appState.applications.contains(where: { $0.bundleIdentifier == application.bundleIdentifier }) {
                     appState.applications.append(application)
                 }
             }
         }
-        
+
         presentationMode.wrappedValue.dismiss()
     }
 }
@@ -659,6 +676,19 @@ struct DetectedApplicationRowView: View {
         VStack(alignment: .leading, spacing: 12) {
             // Application header
             HStack {
+                // App icon
+                if let icon = AppLoader.shared.getAppIcon(for: detectedApp.bundlePath) {
+                    Image(nsImage: icon)
+                        .resizable()
+                        .frame(width: 32, height: 32)
+                        .cornerRadius(6)
+                } else {
+                    Image(systemName: "app")
+                        .font(.title2)
+                        .frame(width: 32, height: 32)
+                        .foregroundColor(.secondary)
+                }
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text(detectedApp.name)
                         .font(.headline)
@@ -912,6 +942,7 @@ struct ManualMultipleAppSelectionView: View {
             let detectedApp = DetectedApplication(
                 name: appName,
                 bundleIdentifier: bundleIdentifier,
+                bundlePath: url.path,
                 availableDirectories: availableDirectories
             )
             newDetectedApps.append(detectedApp)
@@ -968,9 +999,21 @@ struct MultipleAppRowView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: isSupported ? "app.badge.checkmark" : "app.badge.questionmark")
-                .font(.title2)
-                .foregroundColor(isSupported ? .accentColor : .orange)
+            // App icon
+            if let icon = AppLoader.shared.getAppIcon(for: detectedApp.bundlePath) {
+                Image(nsImage: icon)
+                    .resizable()
+                    .frame(width: 40, height: 40)
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(isSupported ? Color.accentColor : Color.orange, lineWidth: 2)
+                    )
+            } else {
+                Image(systemName: isSupported ? "app.badge.checkmark" : "app.badge.questionmark")
+                    .font(.title2)
+                    .foregroundColor(isSupported ? .accentColor : .orange)
+            }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(detectedApp.name)
@@ -1085,14 +1128,31 @@ struct AddCustomPathToDetectedAppView: View {
 
                 Spacer()
 
-                VStack(spacing: 4) {
-                    Text("Add Custom Path")
-                        .font(.title2)
-                        .fontWeight(.bold)
+                VStack(spacing: 8) {
+                    HStack(spacing: 12) {
+                        // App icon
+                        if let icon = AppLoader.shared.getAppIcon(for: detectedApp.bundlePath) {
+                            Image(nsImage: icon)
+                                .resizable()
+                                .frame(width: 32, height: 32)
+                                .cornerRadius(6)
+                        } else {
+                            Image(systemName: "app")
+                                .font(.title2)
+                                .frame(width: 32, height: 32)
+                                .foregroundColor(.secondary)
+                        }
 
-                    Text("for \(detectedApp.name)")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        VStack(spacing: 4) {
+                            Text("Add Custom Path")
+                                .font(.title2)
+                                .fontWeight(.bold)
+
+                            Text("for \(detectedApp.name)")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
 
                 Spacer()
@@ -1194,6 +1254,7 @@ struct AddCustomPathToDetectedAppView: View {
                 }
             }
         }
+        .background(Color(.windowBackgroundColor))
         .frame(minWidth: 550, idealWidth: 600, maxWidth: 700, minHeight: 450, idealHeight: 500, maxHeight: 600)
     }
 
