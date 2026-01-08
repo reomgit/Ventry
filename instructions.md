@@ -1,4 +1,4 @@
-# 🧭 Ventry — Copilot Project Instructions
+# 🧭 Ventry — Project Instructions
 
 ## Overview
 Ventry is a macOS application that helps designers and creators organize and manage creative assets stored locally on their device. It works like a specialized file manager for design resources — fonts, icons, plugins, presets, and more — providing an intuitive way to browse, preview, and manage these assets.

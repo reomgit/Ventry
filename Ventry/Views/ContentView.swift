@@ -15,13 +15,9 @@ struct ContentView: View {
             NavigationSplitView {
                 SidebarView()
             } detail: {
-                if let selectedCollection = appState.selectedCollection {
-                    AssetGridView(collection: selectedCollection)
-                } else {
-                    Text("Select a collection to view assets")
-                        .foregroundColor(.secondary)
-                        .font(.title2)
-                }
+                Text("Choose a collection or shortcut")
+                    .foregroundColor(.secondary)
+                    .font(.title2)
             }
             .navigationSplitViewColumnWidth(
                 min: 200,
