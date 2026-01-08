@@ -67,9 +67,9 @@ struct FileBrowserView_Legacy: View {
                 options: [.skipsHiddenFiles]
             )
             
-            let newEntries = try urls.map { url -> FileBrowserEntry in
+            let newEntries = try urls.map { url -> FileBrowserEntry_Legacy in
                 let values = try url.resourceValues(forKeys: [.isDirectoryKey, .contentTypeKey])
-                return FileBrowserEntry(
+                return FileBrowserEntry_Legacy(
                     url: url,
                     isDirectory: values.isDirectory ?? false,
                     contentType: values.contentType
