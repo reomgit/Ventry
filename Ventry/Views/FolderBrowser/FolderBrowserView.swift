@@ -130,18 +130,30 @@ struct FolderBrowserView: View {
         .contextMenu(forSelectionType: FolderBrowserItem.self) { items in
             contextMenuContent(for: Array(items))
         }
-        .onKeyPress(.delete) {
-            handleDeleteKeyPress()
-            return .handled
-        }
-        .onKeyPress(.return) {
-            handleReturnKeyPress()
-            return .handled
-        }
-        .onKeyPress("a", modifiers: .command) {
-            viewModel.selectAll()
-            return .handled
-        }
+        .background(
+            Group {
+                // Delete key shortcut
+                Button(action: { handleDeleteKeyPress() }) {
+                    EmptyView()
+                }
+                .keyboardShortcut(.delete, modifiers: [])
+                .hidden()
+
+                // Return/Enter key shortcut (default action)
+                Button(action: { handleReturnKeyPress() }) {
+                    EmptyView()
+                }
+                .keyboardShortcut(.defaultAction)
+                .hidden()
+
+                // Command-A (Select All)
+                Button(action: { viewModel.selectAll() }) {
+                    EmptyView()
+                }
+                .keyboardShortcut("a", modifiers: [.command])
+                .hidden()
+            }
+        )
     }
 
     @ViewBuilder
