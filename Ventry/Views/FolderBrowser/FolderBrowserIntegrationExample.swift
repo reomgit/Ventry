@@ -104,20 +104,17 @@ private struct Example3_CustomPath: View {
                     }
                     .disabled(customPath.isEmpty)
                 }
-
-                if showingBrowser && !customPath.isEmpty {
-                    NavigationLink(
-                        destination: FolderBrowserView(
-                            title: URL(fileURLWithPath: customPath).lastPathComponent,
-                            path: customPath
-                        ),
-                        isActive: $showingBrowser
-                    ) {
-                        EmptyView()
-                    }
-                }
             }
             .padding()
+            .background(
+                EmptyView()
+                    .navigationDestination(isPresented: $showingBrowser) {
+                        FolderBrowserView(
+                            title: URL(fileURLWithPath: customPath).lastPathComponent,
+                            path: customPath
+                        )
+                    }
+            )
         }
     }
 }
@@ -318,3 +315,4 @@ struct FolderBrowserFiltered: View {
  // Or use directly:
  FolderBrowserView(title: directory.name, path: directory.path)
  */
+

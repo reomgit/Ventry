@@ -7,7 +7,13 @@ class PermissionManager: ObservableObject {
     
     @Published var hasDirectoryAccess = false
     
-    private init() {}
+    private init() {
+        // Check if we already have access to /Applications
+        let applicationsPath = "/Applications"
+        if checkDirectoryAccess(for: applicationsPath) {
+            hasDirectoryAccess = true
+        }
+    }
     
     func requestDirectoryAccess(for url: URL? = nil) async -> Bool {
         return await withCheckedContinuation { continuation in

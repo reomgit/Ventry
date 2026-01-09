@@ -14,6 +14,7 @@ class AppState: ObservableObject {
     // New: Store loaded apps before scanning
     @Published var loadedApps: [AppLoader.LoadedApp] = []
     @Published var isLoadingApps = false
+    @Published var hasAccess = false
 
     private let applicationManager = ApplicationManager()
     private var cancellables = Set<AnyCancellable>()
@@ -25,8 +26,15 @@ class AppState: ObservableObject {
     
     init() {
         setupBindings()
-        Task {
-            await loadApplicationsFromSystem()
+        
+        // Check initial access state
+        hasAccess = PermissionManager.shared.hasDirectoryAccess
+        
+        // Only load apps if we have access
+        if hasAccess {
+            Task {
+                await loadApplicationsFromSystem()
+            }
         }
     }
 
@@ -46,6 +54,18 @@ class AppState: ObservableObject {
     }
     
     private func setupBindings() {
+        PermissionManager.shared.$hasDirectoryAccess
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] hasAccess in
+                self?.hasAccess = hasAccess
+                if hasAccess {
+                    Task {
+                        await self?.loadApplicationsFromSystem()
+                    }
+                }
+            }
+            .store(in: &cancellables)
+            
         applicationManager.$isInitialized
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in

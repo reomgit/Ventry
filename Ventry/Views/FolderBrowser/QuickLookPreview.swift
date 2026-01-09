@@ -20,7 +20,7 @@ struct QuickLookPreview: NSViewRepresentable {
     }
 
     private func showQuickLook(from view: NSView) {
-        guard let window = view.window else { return }
+        guard view.window != nil else { return }
 
         // Get or create the Quick Look panel
         guard QLPreviewPanel.sharedPreviewPanelExists(),

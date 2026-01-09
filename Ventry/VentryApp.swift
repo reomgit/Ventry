@@ -13,9 +13,15 @@ struct VentryApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(appState)
-                .frame(minWidth: 800, minHeight: 600)
+            Group {
+                if appState.hasAccess {
+                    ContentView()
+                } else {
+                    WelcomeView()
+                }
+            }
+            .environmentObject(appState)
+            .frame(minWidth: 800, minHeight: 600)
         }
         .windowStyle(DefaultWindowStyle())
     }
