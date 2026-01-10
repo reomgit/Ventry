@@ -1,10 +1,11 @@
 import SwiftUI
 
-struct FolderBrowserColumnView: View {
+struct FolderBrowserColumnView<ContextMenu: View>: View {
     let items: [FolderBrowserItem]
     @Binding var selectedItems: Set<FolderBrowserItem>
     let onItemDoubleClick: (FolderBrowserItem) -> Void
     let onItemClick: (FolderBrowserItem, _ isCommandKey: Bool) -> Void
+    let contextMenuBuilder: ([FolderBrowserItem]) -> ContextMenu
 
     private let columns = [
         GridItem(.flexible(minimum: 150), spacing: 20),
@@ -27,6 +28,10 @@ struct FolderBrowserColumnView: View {
                     .onTapGesture {
                         let commandPressed = NSEvent.modifierFlags.contains(.command)
                         onItemClick(item, commandPressed)
+                    }
+                    .contextMenu {
+                        let itemsForMenu = selectedItems.contains(item) ? Array(selectedItems) : [item]
+                        contextMenuBuilder(itemsForMenu)
                     }
                 }
             }

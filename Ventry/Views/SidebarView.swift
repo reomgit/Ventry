@@ -41,8 +41,22 @@ struct SidebarView: View {
                     }
                     
                     ForEach(appState.collections) { collection in
-                        NavigationLink(destination: AssetGridView(collection: collection)) {
+                        NavigationLink(destination: FolderBrowserView(
+                            title: collection.name,
+                            path: collection.path
+                        )) {
                             CollectionRowView(collection: collection)
+                        }
+                        .contextMenu {
+                            Button("Refresh Collection") {
+                                Task {
+                                    await appState.refreshCollection(collection)
+                                }
+                            }
+                            Divider()
+                            Button("Remove Collection", role: .destructive) {
+                                appState.removeCollection(withId: collection.id)
+                            }
                         }
                     }
                 }
@@ -127,6 +141,7 @@ struct CollectionRowView: View {
             Spacer()
         }
         .padding(.vertical, 2)
+        .contentShape(Rectangle())
     }
 }
 
@@ -159,6 +174,7 @@ struct StarredItemRowView: View {
                 .font(.caption)
         }
         .padding(.vertical, 2)
+        .contentShape(Rectangle())
     }
 }
 
@@ -185,6 +201,7 @@ struct RegularFolderRowView: View {
             Spacer()
         }
         .padding(.vertical, 2)
+        .contentShape(Rectangle())
     }
 }
 
@@ -224,6 +241,7 @@ struct ApplicationRowView: View {
             Spacer()
         }
         .padding(.vertical, 2)
+        .contentShape(Rectangle())
     }
 }
 
@@ -249,5 +267,6 @@ struct UserTagRowView: View {
             Spacer()
         }
         .padding(.vertical, 2)
+        .contentShape(Rectangle())
     }
 }

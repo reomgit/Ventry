@@ -194,14 +194,28 @@ struct FolderBrowserWithScan: View {
             let assets = await DirectoryScanner.shared.scanForAssets(at: currentDir.path)
 
             await MainActor.run {
-                // Create collection with scanned assets
+                // Ensure we're using real user path, not sandboxed container path
+                var realPath = currentDir.path
+                if realPath.contains("/Library/Containers/") {
+                    // This is a sandboxed path - resolve to real user path
+                    let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
+                    if let relativePath = currentDir.path.components(separatedBy: "/Data/").last {
+                        realPath = homeDir + "/" + relativePath
+                    }
+                    print("⚠️ Converted container path to real path: \(realPath)")
+                }
+
+                // Create collection with scanned assets and real path
                 let collection = Collection(
                     name: currentDir.lastPathComponent,
+                    path: realPath,
                     assets: assets
                 )
 
                 appState.addCollection(collection)
                 isScanning = false
+
+                print("✅ Created collection '\(collection.name)' with path: \(realPath)")
             }
         }
     }

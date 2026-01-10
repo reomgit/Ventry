@@ -26,14 +26,16 @@ class AppState: ObservableObject {
     
     init() {
         setupBindings()
-        
+
         // Check initial access state
         hasAccess = PermissionManager.shared.hasDirectoryAccess
-        
+
         // Only load apps if we have access
         if hasAccess {
             Task {
                 await loadApplicationsFromSystem()
+                await loadSavedCollections()
+                await validateAllPaths()
             }
         }
     }
@@ -61,6 +63,8 @@ class AppState: ObservableObject {
                 if hasAccess {
                     Task {
                         await self?.loadApplicationsFromSystem()
+                        await self?.loadSavedCollections()
+                        await self?.validateAllPaths()
                     }
                 }
             }
@@ -175,11 +179,99 @@ class AppState: ObservableObject {
     func getAvailableApplications() async -> [String] {
         return await applicationManager.getAvailableApplications()
     }
+    func loadSavedCollections() async {
+        do {
+            let loaded = try CollectionManager.shared.loadAllCollections()
+            await MainActor.run {
+                self.collections = loaded
+                print("Loaded \(loaded.count) collections from disk")
+            }
+        } catch {
+            print("Failed to load collections: \(error)")
+        }
+    }
+
     func addCollection(_ collection: Collection) {
         collections.append(collection)
+
+        // Persist to disk
+        Task {
+            do {
+                try CollectionManager.shared.saveCollection(collection)
+            } catch {
+                print("Failed to save collection: \(error)")
+            }
+        }
     }
-    
+
     func removeCollection(withId id: UUID) {
         collections.removeAll { $0.id == id }
+
+        // Remove from disk
+        Task {
+            do {
+                try CollectionManager.shared.deleteCollection(id)
+            } catch {
+                print("Failed to delete collection: \(error)")
+            }
+        }
+    }
+
+    func refreshCollection(_ collection: Collection) async {
+        do {
+            let updated = try await CollectionManager.shared.refreshCollection(collection)
+
+            await MainActor.run {
+                if let index = collections.firstIndex(where: { $0.id == collection.id }) {
+                    collections[index] = updated
+                }
+            }
+        } catch {
+            print("Failed to refresh collection: \(error)")
+        }
+    }
+
+    // MARK: - Path Validation
+
+    /// Validates all required paths for applications, collections, and regular folders
+    func validateAllPaths() async {
+        var pathsToValidate: [String] = []
+
+        // Add /Applications path
+        pathsToValidate.append("/Applications")
+
+        // Add all application directory paths
+        for application in applications {
+            for directory in application.directories {
+                pathsToValidate.append(directory.path)
+            }
+        }
+
+        // Add regular folder default paths
+        for folder in regularFolders {
+            pathsToValidate.append(folder.defaultPath)
+        }
+
+        // Add starred item paths
+        for starredItem in starredItems {
+            if let path = starredItem.path {
+                pathsToValidate.append(path)
+            }
+        }
+
+        // Add collection paths
+        for collection in collections {
+            pathsToValidate.append(collection.path)
+        }
+
+        // Validate all paths
+        await MainActor.run {
+            PermissionManager.shared.validateRequiredPaths(pathsToValidate)
+        }
+    }
+
+    /// Re-validates paths after permission changes
+    func revalidatePaths() async {
+        await validateAllPaths()
     }
 }

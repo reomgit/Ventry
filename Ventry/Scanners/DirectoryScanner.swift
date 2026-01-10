@@ -11,6 +11,7 @@ class DirectoryScanner {
         
         return Collection(
             name: "\(directory.name) (\(directory.type.rawValue))",
+            path: directory.path,
             assets: assets
         )
     }
@@ -107,3 +108,4 @@ class DirectoryScanner {
         }
     }
 }
+

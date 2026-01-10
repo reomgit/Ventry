@@ -175,15 +175,30 @@ enum RegularFolder: String, CaseIterable {
     }
 
     var defaultPath: String {
-        let homeDirectory = FileManager.default.homeDirectoryForCurrentUser.path
+        let homeURL = FileManager.default.homeDirectoryForCurrentUser
+        var homePath = homeURL.path
+
+        // Ensure we're not using a container path
+        if homePath.contains("/Library/Containers/") {
+            print("⚠️ Warning: homeDirectoryForCurrentUser returned container path: \(homePath)")
+            // Extract real user home from container path
+            if let userMatch = homePath.range(of: #"/Users/[^/]+"#, options: .regularExpression) {
+                homePath = String(homePath[userMatch])
+                print("✅ Resolved to real user home: \(homePath)")
+            }
+        }
+
+        let resolvedPath: String
         switch self {
         case .fonts:
-            return "\(homeDirectory)/Library/Fonts"
+            resolvedPath = "\(homePath)/Library/Fonts"
         case .designAssets:
-            return "\(homeDirectory)/Documents/Ventry/Design Assets"
+            resolvedPath = "\(homePath)/Documents/Ventry/Design Assets"
         case .downloads:
-            return "\(homeDirectory)/Downloads"
+            resolvedPath = "\(homePath)/Downloads"
         }
+
+        return resolvedPath
     }
 
     /// Ensures the directory exists, creating it if necessary

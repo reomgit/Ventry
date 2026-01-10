@@ -68,6 +68,10 @@ struct FolderBrowserView: View {
                 viewModel.navigateTo(url: url)
             }
         }
+        .onChange(of: path) { newPath in
+            let url = URL(fileURLWithPath: newPath)
+            viewModel.navigateTo(url: url)
+        }
         .alert("Delete Items", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) {
                 itemsToDelete = []
@@ -108,28 +112,28 @@ struct FolderBrowserView: View {
                     items: viewModel.items,
                     selectedItems: $viewModel.selectedItems,
                     onItemDoubleClick: handleItemDoubleClick,
-                    onItemClick: handleItemClick
+                    onItemClick: handleItemClick,
+                    contextMenuBuilder: contextMenuContent
                 )
             case .list:
                 FolderBrowserListView(
                     items: viewModel.items,
                     selectedItems: $viewModel.selectedItems,
                     onItemDoubleClick: handleItemDoubleClick,
-                    onItemClick: handleItemClick
+                    onItemClick: handleItemClick,
+                    contextMenuBuilder: contextMenuContent
                 )
             case .column:
                 FolderBrowserColumnView(
                     items: viewModel.items,
                     selectedItems: $viewModel.selectedItems,
                     onItemDoubleClick: handleItemDoubleClick,
-                    onItemClick: handleItemClick
+                    onItemClick: handleItemClick,
+                    contextMenuBuilder: contextMenuContent
                 )
             }
         }
         .quickLookPreview(items: viewModel.items, selectedItems: $viewModel.selectedItems)
-        .contextMenu(forSelectionType: FolderBrowserItem.self) { items in
-            contextMenuContent(for: Array(items))
-        }
         .background(
             Group {
                 // Delete key shortcut
@@ -157,56 +161,72 @@ struct FolderBrowserView: View {
     }
 
     @ViewBuilder
-    private func contextMenuContent(for items: [FolderBrowserItem]) -> some View {
+    func contextMenuContent(for items: [FolderBrowserItem]) -> some View {
         if items.isEmpty {
             EmptyView()
         } else {
             if items.count == 1, let item = items.first {
-                Button("Open") {
+                Button(action: {
                     viewModel.openFile(item: item)
+                }) {
+                    Label("Open", systemImage: "arrow.up.forward.app")
                 }
 
                 if !item.isDirectory {
-                    Button("Quick Look") {
+                    Button(action: {
                         viewModel.selectItem(item)
                         // Trigger Quick Look via spacebar simulation
+                    }) {
+                        Label("Quick Look", systemImage: "eye")
                     }
                 }
 
                 Divider()
             }
 
-            Button("Get Info") {
+            Button(action: {
                 showInfo(for: items)
+            }) {
+                Label("Get Info", systemImage: "info.circle")
             }
 
             Divider()
 
             if items.count == 1 {
-                Button("Rename...") {
+                Button(action: {
                     startRename(items[0])
+                }) {
+                    Label("Rename...", systemImage: "pencil")
                 }
             }
 
-            Button("Copy") {
+            Button(action: {
                 copyItems(items)
+            }) {
+                Label("Copy", systemImage: "doc.on.doc")
             }
 
-            Button("Duplicate") {
+            Button(action: {
                 duplicateItems(items)
+            }) {
+                Label("Duplicate", systemImage: "plus.square.on.square")
             }
 
             Divider()
 
-            Button("Move to Trash") {
+            Button(action: {
                 itemsToDelete = items
                 showingDeleteAlert = true
+            }) {
+                Label("Move to Trash", systemImage: "trash")
             }
 
             Divider()
 
-            Button("Reveal in Finder") {
+            Button(action: {
                 items.forEach { viewModel.revealInFinder(item: $0) }
+            }) {
+                Label("Reveal in Finder", systemImage: "folder")
             }
 
             if items.count == 1, let item = items.first, !item.isDirectory {
@@ -324,9 +344,29 @@ struct FolderBrowserView: View {
     }
 
     private func showInfo(for items: [FolderBrowserItem]) {
-        // Open Finder's Get Info window
+        // Open Finder's Get Info window using AppleScript
         items.forEach { item in
-            NSWorkspace.shared.open(item.url)
+            let posixPath = item.url.path
+            let script = """
+            tell application "Finder"
+                activate
+                set itemPath to POSIX file "\(posixPath)"
+                open information window of itemPath
+            end tell
+            """
+
+            var error: NSDictionary?
+            if let scriptObject = NSAppleScript(source: script) {
+                scriptObject.executeAndReturnError(&error)
+                if let error = error {
+                    // Fallback to revealing in Finder if AppleScript fails
+                    print("AppleScript error: \(error)")
+                    NSWorkspace.shared.activateFileViewerSelecting([item.url])
+                }
+            } else {
+                // Fallback to revealing in Finder
+                NSWorkspace.shared.activateFileViewerSelecting([item.url])
+            }
         }
     }
 

@@ -23,24 +23,23 @@ struct QuickLookPreview: NSViewRepresentable {
         guard view.window != nil else { return }
 
         // Get or create the Quick Look panel
-        guard QLPreviewPanel.sharedPreviewPanelExists(),
-              let panel = QLPreviewPanel.shared() else {
-            return
-        }
+        guard let panel = QLPreviewPanel.shared() else { return }
 
-        // Make sure we have a coordinator to act as data source
-        if panel.dataSource == nil || panel.delegate == nil {
-            let coordinator = QuickLookCoordinator(urls: urls, isPresented: $isPresented)
-            panel.dataSource = coordinator
-            panel.delegate = coordinator
+        // Always update the coordinator with latest URLs
+        let coordinator = QuickLookCoordinator(urls: urls, isPresented: $isPresented)
+        panel.dataSource = coordinator
+        panel.delegate = coordinator
 
-            // Keep coordinator alive
-            objc_setAssociatedObject(panel, "coordinator", coordinator, .OBJC_ASSOCIATION_RETAIN)
-        }
+        // Keep coordinator alive
+        objc_setAssociatedObject(panel, "coordinator", coordinator, .OBJC_ASSOCIATION_RETAIN)
 
+        // Show or update the panel
         if !panel.isVisible {
             panel.makeKeyAndOrderFront(nil)
             panel.center()
+        } else {
+            // If panel is already visible, reload data to show updated selection
+            panel.reloadData()
         }
     }
 }
@@ -66,6 +65,16 @@ class QuickLookCoordinator: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDe
     }
 
     // MARK: - QLPreviewPanelDelegate
+    func previewPanel(_ panel: QLPreviewPanel!, handle event: NSEvent!) -> Bool {
+        // Allow the panel to handle events
+        return false
+    }
+
+    func previewPanel(_ panel: QLPreviewPanel!, sourceFrameOnScreenFor item: QLPreviewItem!) -> NSRect {
+        // Return zero rect to let Quick Look choose its own position
+        return .zero
+    }
+
     func previewPanelDidClose(_ panel: QLPreviewPanel!) {
         isPresented = false
     }

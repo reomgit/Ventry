@@ -9,7 +9,8 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
-    
+    @ObservedObject var permissionManager = PermissionManager.shared
+
     var body: some View {
         GeometryReader { geometry in
             NavigationSplitView {
@@ -35,6 +36,9 @@ struct ContentView: View {
                     appState.selectApplicationInstallation(selectedApp)
                 }
             }
+        }
+        .sheet(isPresented: $permissionManager.needsPathRevalidation) {
+            PathValidationView()
         }
     }
 }

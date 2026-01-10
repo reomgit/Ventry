@@ -926,8 +926,13 @@ struct ManualMultipleAppSelectionView: View {
                 continue
             }
 
-            // Skip if already added
+            // Skip if already added to the detected list
             if detectedApps.contains(where: { $0.bundleIdentifier == bundleIdentifier }) {
+                continue
+            }
+
+            // Skip if already exists in AppState
+            if appState.applications.contains(where: { $0.bundleIdentifier == bundleIdentifier }) {
                 continue
             }
 

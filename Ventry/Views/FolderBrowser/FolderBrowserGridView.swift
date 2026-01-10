@@ -1,10 +1,11 @@
 import SwiftUI
 
-struct FolderBrowserGridView: View {
+struct FolderBrowserGridView<ContextMenu: View>: View {
     let items: [FolderBrowserItem]
     @Binding var selectedItems: Set<FolderBrowserItem>
     let onItemDoubleClick: (FolderBrowserItem) -> Void
     let onItemClick: (FolderBrowserItem, _ isCommandKey: Bool) -> Void
+    let contextMenuBuilder: ([FolderBrowserItem]) -> ContextMenu
 
     @State private var hoveredItem: FolderBrowserItem?
 
@@ -30,6 +31,10 @@ struct FolderBrowserGridView: View {
                     }
                     .onHover { hovering in
                         hoveredItem = hovering ? item : nil
+                    }
+                    .contextMenu {
+                        let itemsForMenu = selectedItems.contains(item) ? Array(selectedItems) : [item]
+                        contextMenuBuilder(itemsForMenu)
                     }
                 }
             }
