@@ -46,7 +46,7 @@ struct ApplicationSettingsView: View {
                     }) {
                         HStack {
                             Image(systemName: "plus.app")
-                            Text("Add App")
+                            Text("Add Custom App")
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
@@ -468,10 +468,18 @@ struct ApplicationScannerView: View {
                 // Show only supported apps
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        Text("Found \(supportedAppsCount) supported application\(supportedAppsCount == 1 ? "" : "s")")
-                            .font(.headline)
-                            .padding(.horizontal)
-                            .padding(.top)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Found \(supportedAppsCount) supported application\(supportedAppsCount == 1 ? "" : "s")")
+                                .font(.headline)
+
+                            if alreadyAddedSupportedAppsCount > 0 {
+                                Text("\(alreadyAddedSupportedAppsCount) already added")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(.horizontal)
+                        .padding(.top)
 
                         Text("Select applications to scan their directories")
                             .font(.subheadline)
@@ -481,27 +489,28 @@ struct ApplicationScannerView: View {
                         // Filter options
                         HStack {
                             Button(action: {
-                                if selectedAppBundles.count == supportedAppsCount {
+                                if selectedSelectableAppsCount == selectableSupportedAppsCount {
                                     selectedAppBundles.removeAll()
                                 } else {
-                                    selectedAppBundles = Set(supportedApps.map { $0.bundlePath })
+                                    selectedAppBundles = Set(selectableSupportedApps.map { $0.bundlePath })
                                 }
                             }) {
                                 HStack {
-                                    Image(systemName: selectedAppBundles.count == supportedAppsCount ? "checkmark.square.fill" : "square")
-                                    Text("Select All (\(supportedAppsCount))")
+                                    Image(systemName: selectedSelectableAppsCount == selectableSupportedAppsCount ? "checkmark.square.fill" : "square")
+                                    Text("Select All (\(selectableSupportedAppsCount))")
                                 }
                             }
                             .buttonStyle(PlainButtonStyle())
+                            .disabled(selectableSupportedAppsCount == 0)
                             .padding(.horizontal)
 
                             Spacer()
 
-                            if selectedAppBundles.count > 0 {
+                            if selectedSelectableAppsCount > 0 {
                                 Button(action: scanSelectedApplications) {
                                     HStack {
                                         Image(systemName: "magnifyingglass")
-                                        Text("Add \(selectedAppBundles.count) App\(selectedAppBundles.count == 1 ? "" : "s")")
+                                        Text("Add \(selectedSelectableAppsCount) App\(selectedSelectableAppsCount == 1 ? "" : "s")")
                                     }
                                     .padding(.horizontal, 16)
                                     .padding(.vertical, 8)
@@ -523,6 +532,7 @@ struct ApplicationScannerView: View {
                                 LoadedAppRow(
                                     app: app,
                                     isSelected: selectedAppBundles.contains(app.bundlePath),
+                                    isAlreadyAdded: isAppAlreadyAdded(app),
                                     onToggle: {
                                         if selectedAppBundles.contains(app.bundlePath) {
                                             selectedAppBundles.remove(app.bundlePath)
@@ -556,6 +566,22 @@ struct ApplicationScannerView: View {
     private var supportedAppsCount: Int {
         supportedApps.count
     }
+
+    private var selectableSupportedApps: [AppLoader.LoadedApp] {
+        supportedApps.filter { !isAppAlreadyAdded($0) }
+    }
+
+    private var selectableSupportedAppsCount: Int {
+        selectableSupportedApps.count
+    }
+
+    private var selectedSelectableAppsCount: Int {
+        selectableSupportedApps.filter { selectedAppBundles.contains($0.bundlePath) }.count
+    }
+
+    private var alreadyAddedSupportedAppsCount: Int {
+        supportedAppsCount - selectableSupportedAppsCount
+    }
     
     private var selectedDirectoriesCount: Int {
         detectedApplications.reduce(0) { total, app in
@@ -577,7 +603,9 @@ struct ApplicationScannerView: View {
         var detected: [DetectedApplication] = []
 
         // Get selected apps
-        let selectedApps = appState.loadedApps.filter { selectedAppBundles.contains($0.bundlePath) }
+        let selectedApps = appState.loadedApps.filter {
+            selectedAppBundles.contains($0.bundlePath) && !isAppAlreadyAdded($0)
+        }
 
         for loadedApp in selectedApps where loadedApp.isSupported {
             if let bundleIdentifier = loadedApp.bundleIdentifier,
@@ -602,6 +630,11 @@ struct ApplicationScannerView: View {
             self.detectedApplications = detected
             self.isScanning = false
         }
+    }
+
+    private func isAppAlreadyAdded(_ app: AppLoader.LoadedApp) -> Bool {
+        guard let bundleIdentifier = app.bundleIdentifier else { return false }
+        return appState.applications.contains { $0.bundleIdentifier == bundleIdentifier }
     }
     
     private func createAvailableDirectories(from supportedApp: SupportedApplication, appName: String, appURL: URL) -> [AvailableDirectory] {
@@ -639,6 +672,10 @@ struct ApplicationScannerView: View {
 
     private func addSelectedApplications() {
         for detectedApp in detectedApplications {
+            if detectedApp.isAlreadyAdded {
+                continue
+            }
+
             let selectedDirectories = detectedApp.availableDirectories
                 .filter { $0.isSelected }
                 .map { AppDirectory(name: $0.name, path: $0.path, type: $0.type) }
@@ -796,6 +833,7 @@ struct ManualMultipleAppSelectionView: View {
                         showingInstallationFlow = true
                     }
                     .buttonStyle(PrimaryButtonStyle())
+                    .disabled(installableDetectedApps.isEmpty)
                 } else {
                     Button("") { }
                         .opacity(0)
@@ -852,6 +890,13 @@ struct ManualMultipleAppSelectionView: View {
                         .padding(.horizontal)
                         .padding(.top)
 
+                    if alreadyAddedDetectedAppsCount > 0 {
+                        Text("\(alreadyAddedDetectedAppsCount) already added")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal)
+                    }
+
                     List {
                         ForEach(detectedApps) { app in
                             MultipleAppRowView(
@@ -901,7 +946,7 @@ struct ManualMultipleAppSelectionView: View {
         }
         .sheet(isPresented: $showingInstallationFlow) {
             ApplicationInstallationFlowView(
-                detectedApps: detectedApps,
+                detectedApps: installableDetectedApps,
                 supportedApps: appState.applicationManagerAccess.supportedApplications,
                 onComplete: { installedApps in
                     // Add installed apps to app state
@@ -916,9 +961,18 @@ struct ManualMultipleAppSelectionView: View {
         }
     }
 
+    private var installableDetectedApps: [DetectedApplication] {
+        detectedApps.filter { !$0.isAlreadyAdded }
+    }
+
+    private var alreadyAddedDetectedAppsCount: Int {
+        detectedApps.filter { $0.isAlreadyAdded }.count
+    }
+
     private func processSelectedApps(urls: [URL]) {
         errorMessage = nil
         var newDetectedApps: [DetectedApplication] = []
+        var existingBundleIdentifiers = Set(detectedApps.map { $0.bundleIdentifier })
 
         for url in urls {
             guard let bundleIdentifier = getBundleIdentifier(for: url) else {
@@ -927,20 +981,19 @@ struct ManualMultipleAppSelectionView: View {
             }
 
             // Skip if already added to the detected list
-            if detectedApps.contains(where: { $0.bundleIdentifier == bundleIdentifier }) {
+            if existingBundleIdentifiers.contains(bundleIdentifier) {
                 continue
             }
+            existingBundleIdentifiers.insert(bundleIdentifier)
 
-            // Skip if already exists in AppState
-            if appState.applications.contains(where: { $0.bundleIdentifier == bundleIdentifier }) {
-                continue
-            }
+            let isAlreadyAdded = appState.applications.contains { $0.bundleIdentifier == bundleIdentifier }
 
             let appName = url.deletingPathExtension().lastPathComponent
 
             // Check if app is supported and create available directories
             var availableDirectories: [AvailableDirectory] = []
-            if let supportedApp = appState.applicationManagerAccess.getSupportedApplication(for: bundleIdentifier) {
+            if !isAlreadyAdded,
+               let supportedApp = appState.applicationManagerAccess.getSupportedApplication(for: bundleIdentifier) {
                 availableDirectories = createAvailableDirectories(from: supportedApp, appName: appName, appURL: url)
             }
 
@@ -948,7 +1001,8 @@ struct ManualMultipleAppSelectionView: View {
                 name: appName,
                 bundleIdentifier: bundleIdentifier,
                 bundlePath: url.path,
-                availableDirectories: availableDirectories
+                availableDirectories: availableDirectories,
+                isAlreadyAdded: isAlreadyAdded
             )
             newDetectedApps.append(detectedApp)
         }
@@ -1034,7 +1088,17 @@ struct MultipleAppRowView: View {
                         .foregroundColor(isSupported ? .accentColor : .orange)
                         .cornerRadius(4)
 
-                    if isSupported {
+                    if detectedApp.isAlreadyAdded {
+                        Text("Already Added")
+                            .font(.caption)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.green.opacity(0.2))
+                            .foregroundColor(.green)
+                            .cornerRadius(4)
+                    }
+
+                    if isSupported && !detectedApp.isAlreadyAdded {
                         Text("(\(detectedApp.availableDirectories.count) paths)")
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -1064,15 +1128,20 @@ struct MultipleAppRowView: View {
 struct LoadedAppRow: View {
     let app: AppLoader.LoadedApp
     let isSelected: Bool
+    let isAlreadyAdded: Bool
     let onToggle: () -> Void
 
     var body: some View {
-        Button(action: onToggle) {
+        Button(action: {
+            if !isAlreadyAdded {
+                onToggle()
+            }
+        }) {
             HStack(spacing: 12) {
                 // Checkbox
-                Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                Image(systemName: checkboxIcon)
                     .font(.title3)
-                    .foregroundColor(isSelected ? .accentColor : .secondary)
+                    .foregroundColor(checkboxColor)
 
                 // App icon
                 if let icon = AppLoader.shared.getAppIcon(for: app.bundlePath) {
@@ -1093,6 +1162,16 @@ struct LoadedAppRow: View {
                         .font(.headline)
                         .foregroundColor(.primary)
 
+                    if isAlreadyAdded {
+                        Text("Already Added")
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.green.opacity(0.2))
+                            .foregroundColor(.green)
+                            .cornerRadius(4)
+                    }
+
                     if let bundleID = app.bundleIdentifier {
                         Text(bundleID)
                             .font(.caption)
@@ -1104,10 +1183,31 @@ struct LoadedAppRow: View {
             }
             .padding(.vertical, 8)
             .padding(.horizontal, 12)
-            .background(isSelected ? Color.accentColor.opacity(0.1) : Color.clear)
+            .background(backgroundColor)
             .cornerRadius(8)
         }
         .buttonStyle(PlainButtonStyle())
+    }
+
+    private var checkboxIcon: String {
+        if isAlreadyAdded {
+            return "checkmark.circle.fill"
+        }
+        return isSelected ? "checkmark.square.fill" : "square"
+    }
+
+    private var checkboxColor: Color {
+        if isAlreadyAdded {
+            return .green
+        }
+        return isSelected ? .accentColor : .secondary
+    }
+
+    private var backgroundColor: Color {
+        if isAlreadyAdded {
+            return Color.green.opacity(0.08)
+        }
+        return isSelected ? Color.accentColor.opacity(0.1) : Color.clear
     }
 }
 

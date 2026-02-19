@@ -11,7 +11,15 @@ struct ApplicationDirectoryView: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 16) {
                 ForEach(application.directories) { directory in
-                    DirectoryCardView(directory: directory)
+                    NavigationLink(
+                        destination: FolderBrowserView(
+                            title: "\(application.name) • \(directory.name)",
+                            path: directory.path
+                        )
+                    ) {
+                        DirectoryCardView(directory: directory)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             .padding()
@@ -65,5 +73,6 @@ struct DirectoryCardView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color(.separatorColor), lineWidth: 0.5)
         )
+        .contentShape(Rectangle())
     }
 }

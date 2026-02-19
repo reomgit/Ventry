@@ -28,12 +28,14 @@ struct SidebarView: View {
                         .italic()
                 } else {
                     ForEach(appState.regularFolders, id: \.self) { folder in
-                        NavigationLink(destination: FileBrowserView(title: folder.rawValue, path: folder.defaultPath)) {
+                        NavigationLink(
+                            destination: FileBrowserView(title: folder.rawValue, path: folder.defaultPath)
+                                .onAppear {
+                                    folder.ensureDirectoryExists()
+                                }
+                        ) {
                             RegularFolderRowView(folder: folder)
                         }
-                        .simultaneousGesture(TapGesture().onEnded {
-                            folder.ensureDirectoryExists()
-                        })
                     }
                     
                     if !appState.regularFolders.isEmpty && !appState.collections.isEmpty {
@@ -46,18 +48,19 @@ struct SidebarView: View {
                             path: collection.path
                         )) {
                             CollectionRowView(collection: collection)
-                        }
-                        .contextMenu {
-                            Button("Refresh Collection") {
-                                Task {
-                                    await appState.refreshCollection(collection)
+                                .contextMenu {
+                                    Button("Refresh Collection") {
+                                        Task {
+                                            await appState.refreshCollection(collection)
+                                        }
+                                    }
+                                    Divider()
+                                    Button("Remove Collection", role: .destructive) {
+                                        appState.removeCollection(withId: collection.id)
+                                    }
                                 }
-                            }
-                            Divider()
-                            Button("Remove Collection", role: .destructive) {
-                                appState.removeCollection(withId: collection.id)
-                            }
                         }
+                        .contentShape(Rectangle())
                     }
                 }
             }
@@ -140,6 +143,7 @@ struct CollectionRowView: View {
             
             Spacer()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 2)
         .contentShape(Rectangle())
     }
@@ -173,6 +177,7 @@ struct StarredItemRowView: View {
                 .foregroundColor(.yellow)
                 .font(.caption)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 2)
         .contentShape(Rectangle())
     }
@@ -200,6 +205,7 @@ struct RegularFolderRowView: View {
             
             Spacer()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 2)
         .contentShape(Rectangle())
     }
@@ -240,6 +246,7 @@ struct ApplicationRowView: View {
 
             Spacer()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 2)
         .contentShape(Rectangle())
     }
@@ -266,6 +273,7 @@ struct UserTagRowView: View {
             
             Spacer()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 2)
         .contentShape(Rectangle())
     }

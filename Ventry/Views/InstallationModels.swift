@@ -10,6 +10,7 @@ struct DetectedApplication: Identifiable {
     let bundleIdentifier: String
     let bundlePath: String
     var availableDirectories: [AvailableDirectory]
+    var isAlreadyAdded: Bool = false
 }
 
 struct AvailableDirectory: Identifiable {
