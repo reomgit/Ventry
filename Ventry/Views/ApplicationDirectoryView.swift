@@ -1,30 +1,53 @@
 import SwiftUI
 
 struct ApplicationDirectoryView: View {
-    let application: Application
+    @EnvironmentObject var appState: AppState
+    let bundleIdentifier: String
     
     private let columns = [
         GridItem(.adaptive(minimum: 150, maximum: 200), spacing: 16)
     ]
+
+    private var application: Application? {
+        appState.applications.first { $0.bundleIdentifier == bundleIdentifier }
+    }
     
     var body: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 16) {
-                ForEach(application.directories) { directory in
-                    NavigationLink(
-                        destination: FolderBrowserView(
-                            title: "\(application.name) • \(directory.name)",
-                            path: directory.path
-                        )
-                    ) {
-                        DirectoryCardView(directory: directory)
+        Group {
+            if let application {
+                ScrollView {
+                    LazyVGrid(columns: columns, spacing: 16) {
+                        ForEach(application.directories) { directory in
+                            NavigationLink(
+                                destination: FolderBrowserView(
+                                    title: "\(application.name) • \(directory.name)",
+                                    path: directory.path
+                                )
+                            ) {
+                                DirectoryCardView(directory: directory)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
-                    .buttonStyle(.plain)
+                    .padding()
                 }
+                .navigationTitle(application.name)
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "app.badge.xmark")
+                        .font(.system(size: 48))
+                        .foregroundColor(.secondary)
+
+                    Text("Application Not Found")
+                        .font(.title2)
+                        .fontWeight(.medium)
+
+                    Text("This application may have been removed from Ventry.")
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .padding()
         }
-        .navigationTitle(application.name)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.large)
         #endif

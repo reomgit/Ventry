@@ -2,6 +2,8 @@ import SwiftUI
 
 struct SidebarView: View {
     @EnvironmentObject var appState: AppState
+    @State private var pendingDeleteApplication: Application? = nil
+    @State private var showingDeleteApplicationAlert = false
     
     var body: some View {
         List {
@@ -86,8 +88,14 @@ struct SidebarView: View {
                     }
                 } else {
                     ForEach(appState.applications) { application in
-                        NavigationLink(destination: ApplicationDirectoryView(application: application)) {
+                        NavigationLink(destination: ApplicationDirectoryView(bundleIdentifier: application.bundleIdentifier)) {
                             ApplicationRowView(application: application)
+                        }
+                        .contextMenu {
+                            Button("Remove Application", role: .destructive) {
+                                pendingDeleteApplication = application
+                                showingDeleteApplicationAlert = true
+                            }
                         }
                     }
                     
@@ -119,6 +127,17 @@ struct SidebarView: View {
         }
         .navigationTitle("Library")
         .listStyle(SidebarListStyle())
+        .alert("Remove App From Ventry?", isPresented: $showingDeleteApplicationAlert, presenting: pendingDeleteApplication) { app in
+            Button("Remove App", role: .destructive) {
+                appState.removeApplication(app)
+                pendingDeleteApplication = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingDeleteApplication = nil
+            }
+        } message: { app in
+            Text("This will remove \(app.name) from Ventry and delete all \(app.directories.count) path entr\(app.directories.count == 1 ? "y" : "ies") assigned to it.")
+        }
     }
 }
 

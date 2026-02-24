@@ -79,6 +79,25 @@ final class ApplicationManager: ObservableObject {
             storedApplications[index] = app
         }
     }
+
+    func updateCustomDirectory(for bundleIdentifier: String, directory: AppDirectory) {
+        guard let appIndex = storedApplications.firstIndex(where: { $0.bundleIdentifier == bundleIdentifier }),
+              let dirIndex = storedApplications[appIndex].directories.firstIndex(where: { $0.id == directory.id }) else {
+            return
+        }
+
+        var app = storedApplications[appIndex]
+        app.directories[dirIndex] = directory
+        storedApplications[appIndex] = app
+    }
+
+    func removeApplication(bundleIdentifier: String) {
+        storedApplications.removeAll { $0.bundleIdentifier == bundleIdentifier }
+        pendingMultipleInstallations.removeAll { $0.1.contains(where: { $0.bundleIdentifier == bundleIdentifier }) }
+        if pendingMultipleInstallations.isEmpty {
+            showingMultipleInstallationsAlert = false
+        }
+    }
     
     // Called when user selects one of multiple installations in the sheet
     func selectApplicationVersion(baseName: String, selectedApp: DetectedApplication) async -> Application? {

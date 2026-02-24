@@ -266,6 +266,36 @@ class FolderBrowserViewModel: ObservableObject {
         }
     }
 
+    func importDroppedItems(
+        _ droppedURLs: [URL],
+        to destinationDirectory: URL,
+        preferMove: Bool
+    ) async throws {
+        guard !droppedURLs.isEmpty else { return }
+
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: destinationDirectory.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            throw NSError(domain: "FolderBrowser", code: 2, userInfo: [
+                NSLocalizedDescriptionKey: "Drop destination does not exist."
+            ])
+        }
+
+        let uniqueURLs = Array(Set(droppedURLs.map { $0.standardizedFileURL }))
+
+        for sourceURL in uniqueURLs {
+            try moveOrCopyDroppedItem(
+                sourceURL,
+                to: destinationDirectory.standardizedFileURL,
+                preferMove: preferMove
+            )
+        }
+
+        if let current = currentDirectory {
+            await performLoad(at: current)
+        }
+    }
+
     func refresh() {
         if let current = currentDirectory {
             loadDirectory(at: current)
@@ -276,6 +306,71 @@ class FolderBrowserViewModel: ObservableObject {
     var breadcrumbs: [String] {
         guard let current = currentDirectory else { return [] }
         return current.pathComponents.filter { $0 != "/" }
+    }
+
+    private func moveOrCopyDroppedItem(
+        _ sourceURL: URL,
+        to destinationDirectory: URL,
+        preferMove: Bool
+    ) throws {
+        let source = sourceURL.standardizedFileURL
+        let destinationRoot = destinationDirectory.standardizedFileURL
+        let sourceScoped = source.startAccessingSecurityScopedResource()
+        let destinationScoped = destinationRoot.startAccessingSecurityScopedResource()
+        defer {
+            if sourceScoped {
+                source.stopAccessingSecurityScopedResource()
+            }
+            if destinationScoped {
+                destinationRoot.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        // Reject dropping a folder into itself or one of its descendants.
+        if source.hasDirectoryPath,
+           (source == destinationRoot || destinationRoot.path.hasPrefix(source.path + "/")) {
+            throw NSError(domain: "FolderBrowser", code: 3, userInfo: [
+                NSLocalizedDescriptionKey: "Cannot place a folder inside itself."
+            ])
+        }
+
+        let sourceParent = source.deletingLastPathComponent().standardizedFileURL
+        let sameParent = sourceParent == destinationRoot
+
+        // Same-directory move is a no-op.
+        if preferMove && sameParent {
+            return
+        }
+
+        let destinationURL = uniqueDestinationURL(for: source, in: destinationRoot)
+
+        if preferMove {
+            try fileManager.moveItem(at: source, to: destinationURL)
+        } else {
+            try fileManager.copyItem(at: source, to: destinationURL)
+        }
+    }
+
+    private func uniqueDestinationURL(for sourceURL: URL, in destinationDirectory: URL) -> URL {
+        let preferred = destinationDirectory.appendingPathComponent(sourceURL.lastPathComponent)
+        guard fileManager.fileExists(atPath: preferred.path) else {
+            return preferred
+        }
+
+        let ext = sourceURL.pathExtension
+        let baseName = sourceURL.deletingPathExtension().lastPathComponent
+        var counter = 1
+        var candidate = preferred
+
+        repeat {
+            let newName = ext.isEmpty
+                ? "\(baseName) \(counter)"
+                : "\(baseName) \(counter).\(ext)"
+            candidate = destinationDirectory.appendingPathComponent(newName)
+            counter += 1
+        } while fileManager.fileExists(atPath: candidate.path)
+
+        return candidate
     }
 
     // MARK: - Cleanup

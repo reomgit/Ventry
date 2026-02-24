@@ -13,6 +13,7 @@ struct FolderBrowserView: View {
     @State private var itemToRename: FolderBrowserItem?
     @State private var renameText = ""
     @State private var errorAlert: ErrorAlert?
+    @State private var activeDragPaths: Set<String> = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -68,7 +69,7 @@ struct FolderBrowserView: View {
                 viewModel.navigateTo(url: url)
             }
         }
-        .onChange(of: path) { newPath in
+        .onChange(of: path) { _, newPath in
             let url = URL(fileURLWithPath: newPath)
             viewModel.navigateTo(url: url)
         }
@@ -113,7 +114,12 @@ struct FolderBrowserView: View {
                     selectedItems: $viewModel.selectedItems,
                     onItemDoubleClick: handleItemDoubleClick,
                     onItemClick: handleItemClick,
-                    contextMenuBuilder: contextMenuContent
+                    contextMenuBuilder: contextMenuContent,
+                    onDropOnItem: { droppedURLs, item in
+                        handleDrop(droppedURLs, onto: item.url)
+                    },
+                    onDropInCurrentDirectory: handleDropInCurrentDirectory,
+                    onInternalDragBegan: handleInternalDragBegan
                 )
             case .list:
                 FolderBrowserListView(
@@ -121,7 +127,12 @@ struct FolderBrowserView: View {
                     selectedItems: $viewModel.selectedItems,
                     onItemDoubleClick: handleItemDoubleClick,
                     onItemClick: handleItemClick,
-                    contextMenuBuilder: contextMenuContent
+                    contextMenuBuilder: contextMenuContent,
+                    onDropOnItem: { droppedURLs, item in
+                        handleDrop(droppedURLs, onto: item.url)
+                    },
+                    onDropInCurrentDirectory: handleDropInCurrentDirectory,
+                    onInternalDragBegan: handleInternalDragBegan
                 )
             case .column:
                 FolderBrowserColumnView(
@@ -129,7 +140,12 @@ struct FolderBrowserView: View {
                     selectedItems: $viewModel.selectedItems,
                     onItemDoubleClick: handleItemDoubleClick,
                     onItemClick: handleItemClick,
-                    contextMenuBuilder: contextMenuContent
+                    contextMenuBuilder: contextMenuContent,
+                    onDropOnItem: { droppedURLs, item in
+                        handleDrop(droppedURLs, onto: item.url)
+                    },
+                    onDropInCurrentDirectory: handleDropInCurrentDirectory,
+                    onInternalDragBegan: handleInternalDragBegan
                 )
             }
         }
@@ -158,6 +174,9 @@ struct FolderBrowserView: View {
                 .hidden()
             }
         )
+        .onDisappear {
+            activeDragPaths.removeAll()
+        }
     }
 
     @ViewBuilder
@@ -262,6 +281,65 @@ struct FolderBrowserView: View {
         guard let item = viewModel.selectedItems.first,
               viewModel.selectedItems.count == 1 else { return }
         viewModel.openFile(item: item)
+    }
+
+    private func handleInternalDragBegan(_ draggedURLs: [URL]) {
+        activeDragPaths = Set(draggedURLs.map { $0.standardizedFileURL.path })
+    }
+
+    private func handleDropInCurrentDirectory(_ droppedURLs: [URL]) -> Bool {
+        guard let currentDirectory = viewModel.currentDirectory else { return false }
+        return handleDrop(droppedURLs, onto: currentDirectory)
+    }
+
+    private func handleDrop(_ droppedURLs: [URL], onto destinationDirectory: URL) -> Bool {
+        guard !droppedURLs.isEmpty else { return false }
+
+        let normalizedURLs = droppedURLs.map { $0.standardizedFileURL }
+        let shouldMove = shouldMoveDroppedItems(normalizedURLs)
+
+        Task {
+            do {
+                try await viewModel.importDroppedItems(
+                    normalizedURLs,
+                    to: destinationDirectory,
+                    preferMove: shouldMove
+                )
+            } catch {
+                await MainActor.run {
+                    errorAlert = ErrorAlert(
+                        title: "Drop Failed",
+                        message: "Could not complete the drop: \(error.localizedDescription)"
+                    )
+                }
+            }
+
+            await MainActor.run {
+                activeDragPaths.removeAll()
+            }
+        }
+
+        return true
+    }
+
+    private func shouldMoveDroppedItems(_ droppedURLs: [URL]) -> Bool {
+        let optionCopyRequested = NSEvent.modifierFlags.contains(.option)
+        if optionCopyRequested {
+            return false
+        }
+
+        guard let currentDirectory = viewModel.currentDirectory?.standardizedFileURL else {
+            return false
+        }
+
+        let droppedPaths = Set(droppedURLs.map { $0.path })
+        if !activeDragPaths.isEmpty && droppedPaths.isSubset(of: activeDragPaths) {
+            return true
+        }
+
+        return droppedURLs.allSatisfy {
+            $0.deletingLastPathComponent().standardizedFileURL == currentDirectory
+        }
     }
 
     // MARK: - File Operations

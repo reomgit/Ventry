@@ -116,7 +116,13 @@ class AppState: ObservableObject {
         
         // Update the application in our list
         if let index = applications.firstIndex(where: { $0.id == application.id }) {
-            applications[index].addDirectory(directory)
+            var updatedApplication = applications[index]
+            updatedApplication.addDirectory(directory)
+            applications[index] = updatedApplication
+        }
+
+        Task { @MainActor in
+            await validateAllPaths()
         }
     }
     
@@ -125,7 +131,38 @@ class AppState: ObservableObject {
         
         // Update the application in our list
         if let index = applications.firstIndex(where: { $0.id == application.id }) {
-            applications[index].removeDirectory(withId: directoryId)
+            var updatedApplication = applications[index]
+            updatedApplication.removeDirectory(withId: directoryId)
+            applications[index] = updatedApplication
+        }
+
+        Task { @MainActor in
+            await validateAllPaths()
+        }
+    }
+
+    func updateCustomDirectory(for application: Application, directory: AppDirectory) {
+        applicationManager.updateCustomDirectory(for: application.bundleIdentifier, directory: directory)
+
+        // Update the application in our list
+        if let index = applications.firstIndex(where: { $0.id == application.id }),
+           let directoryIndex = applications[index].directories.firstIndex(where: { $0.id == directory.id }) {
+            var updatedApplication = applications[index]
+            updatedApplication.directories[directoryIndex] = directory
+            applications[index] = updatedApplication
+        }
+
+        Task { @MainActor in
+            await validateAllPaths()
+        }
+    }
+
+    func removeApplication(_ application: Application) {
+        applicationManager.removeApplication(bundleIdentifier: application.bundleIdentifier)
+        applications.removeAll { $0.bundleIdentifier == application.bundleIdentifier }
+
+        Task { @MainActor in
+            await validateAllPaths()
         }
     }
     

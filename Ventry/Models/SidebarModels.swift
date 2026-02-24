@@ -66,12 +66,12 @@ struct Application: Identifiable, Codable, Equatable {
 
 struct AppDirectory: Identifiable, Codable {
     let id: UUID
-    let name: String
-    let path: String
-    let type: DirectoryType
+    var name: String
+    var path: String
+    var type: DirectoryType
     
-    init(name: String, path: String, type: DirectoryType) {
-        self.id = UUID()
+    init(id: UUID = UUID(), name: String, path: String, type: DirectoryType) {
+        self.id = id
         self.name = name
         self.path = path
         self.type = type

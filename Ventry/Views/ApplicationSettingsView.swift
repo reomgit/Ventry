@@ -3,10 +3,13 @@ import UniformTypeIdentifiers
 
 struct ApplicationSettingsView: View {
     @EnvironmentObject var appState: AppState
-    @State private var showingAddDirectory = false
     @State private var selectedApplication: Application?
     @State private var showingApplicationScanner = false
     @State private var showingMultipleAppSelection = false
+    @State private var pendingRemoveApp: Application? = nil
+    @State private var showingRemoveAppAlert = false
+    @State private var pendingDeleteApp: Application? = nil
+    @State private var showingDeleteAppAlert = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -90,10 +93,21 @@ struct ApplicationSettingsView: View {
                             application: application,
                             onAddDirectory: {
                                 selectedApplication = application
-                                showingAddDirectory = true
                             },
                             onRemoveDirectory: { directoryId in
                                 appState.removeCustomDirectory(for: application, directoryId: directoryId)
+
+                                if application.directories.count == 1 {
+                                    pendingRemoveApp = application
+                                    showingRemoveAppAlert = true
+                                }
+                            },
+                            onUpdateDirectory: { updatedDirectory in
+                                appState.updateCustomDirectory(for: application, directory: updatedDirectory)
+                            },
+                            onDeleteApplication: {
+                                pendingDeleteApp = application
+                                showingDeleteAppAlert = true
                             }
                         )
                     }
@@ -101,11 +115,9 @@ struct ApplicationSettingsView: View {
                 .listStyle(PlainListStyle())
             }
         }
-        .sheet(isPresented: $showingAddDirectory) {
-            if let application = selectedApplication {
-                AddDirectoryView(application: application)
-                    .environmentObject(appState)
-            }
+        .sheet(item: $selectedApplication) { application in
+            AddDirectoryView(application: application)
+                .environmentObject(appState)
         }
         .sheet(isPresented: $showingApplicationScanner) {
             ApplicationScannerView()
@@ -115,6 +127,28 @@ struct ApplicationSettingsView: View {
             ManualMultipleAppSelectionView()
                 .environmentObject(appState)
         }
+        .alert("Remove App From Ventry?", isPresented: $showingRemoveAppAlert, presenting: pendingRemoveApp) { app in
+            Button("Remove App", role: .destructive) {
+                appState.removeApplication(app)
+                pendingRemoveApp = nil
+            }
+            Button("Keep App", role: .cancel) {
+                pendingRemoveApp = nil
+            }
+        } message: { app in
+            Text("You removed the last path for \(app.name). Do you want to remove the app from Ventry as well?")
+        }
+        .alert("Remove App From Ventry?", isPresented: $showingDeleteAppAlert, presenting: pendingDeleteApp) { app in
+            Button("Remove App", role: .destructive) {
+                appState.removeApplication(app)
+                pendingDeleteApp = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingDeleteApp = nil
+            }
+        } message: { app in
+            Text("This will remove \(app.name) from Ventry and delete all \(app.directories.count) path entr\(app.directories.count == 1 ? "y" : "ies") assigned to it.")
+        }
     }
 }
 
@@ -122,6 +156,8 @@ struct SettingsApplicationRowView: View {
     let application: Application
     let onAddDirectory: () -> Void
     let onRemoveDirectory: (UUID) -> Void
+    let onUpdateDirectory: (AppDirectory) -> Void
+    let onDeleteApplication: () -> Void
     
     @State private var isExpanded = false
     
@@ -164,6 +200,13 @@ struct SettingsApplicationRowView: View {
                     .background(Color.accentColor.opacity(0.2))
                     .foregroundColor(.accentColor)
                     .cornerRadius(12)
+
+                Button(role: .destructive, action: onDeleteApplication) {
+                    Image(systemName: "trash")
+                        .foregroundColor(.red)
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(PlainButtonStyle())
                 
                 Button(action: {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -183,6 +226,7 @@ struct SettingsApplicationRowView: View {
                     ForEach(application.directories) { directory in
                         SettingsDirectoryRowView(
                             directory: directory,
+                            onUpdate: onUpdateDirectory,
                             onRemove: {
                                 onRemoveDirectory(directory.id)
                             }
@@ -207,12 +251,20 @@ struct SettingsApplicationRowView: View {
         .padding()
         .background(Color(.controlBackgroundColor).opacity(0.5))
         .cornerRadius(12)
+        .contextMenu {
+            Button("Remove Application", role: .destructive) {
+                onDeleteApplication()
+            }
+        }
     }
 }
 
 struct SettingsDirectoryRowView: View {
     let directory: AppDirectory
+    let onUpdate: (AppDirectory) -> Void
     let onRemove: () -> Void
+
+    @State private var showingEditDirectory = false
     
     var body: some View {
         HStack {
@@ -239,6 +291,15 @@ struct SettingsDirectoryRowView: View {
                 .padding(.vertical, 2)
                 .background(Color(.secondarySystemFill))
                 .cornerRadius(4)
+
+            Button {
+                showingEditDirectory = true
+            } label: {
+                Image(systemName: "pencil")
+                    .foregroundColor(.secondary)
+                    .font(.system(size: 12))
+            }
+            .buttonStyle(PlainButtonStyle())
             
             Button(action: onRemove) {
                 Image(systemName: "trash")
@@ -248,6 +309,15 @@ struct SettingsDirectoryRowView: View {
             .buttonStyle(PlainButtonStyle())
         }
         .padding(.vertical, 4)
+        .sheet(isPresented: $showingEditDirectory) {
+            EditDirectoryView(
+                directory: directory,
+                onSave: { updatedDirectory in
+                    onUpdate(updatedDirectory)
+                    showingEditDirectory = false
+                }
+            )
+        }
     }
 }
 
@@ -382,6 +452,135 @@ struct AddDirectoryView: View {
         )
         
         appState.addCustomDirectory(for: application, directory: directory)
+        presentationMode.wrappedValue.dismiss()
+    }
+}
+
+struct EditDirectoryView: View {
+    let directory: AppDirectory
+    let onSave: (AppDirectory) -> Void
+    @Environment(\.presentationMode) var presentationMode
+
+    @State private var directoryName: String
+    @State private var directoryPath: String
+    @State private var selectedType: DirectoryType
+    @State private var showingFileImporter = false
+
+    init(directory: AppDirectory, onSave: @escaping (AppDirectory) -> Void) {
+        self.directory = directory
+        self.onSave = onSave
+        _directoryName = State(initialValue: directory.name)
+        _directoryPath = State(initialValue: directory.path)
+        _selectedType = State(initialValue: directory.type)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Button("Cancel") {
+                    presentationMode.wrappedValue.dismiss()
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                Spacer()
+
+                Text("Edit Directory")
+                    .font(.title2)
+                    .fontWeight(.bold)
+
+                Spacer()
+
+                Button("Save") {
+                    saveDirectory()
+                }
+                .buttonStyle(PlainButtonStyle())
+                .disabled(directoryName.isEmpty || directoryPath.isEmpty)
+            }
+            .padding()
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Directory Information")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Directory Name")
+                                .font(.subheadline)
+                            TextField("Enter directory name", text: $directoryName)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                        }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Type")
+                                .font(.subheadline)
+                            Picker("Type", selection: $selectedType) {
+                                ForEach(DirectoryType.allCases, id: \.self) { type in
+                                    HStack {
+                                        Image(systemName: type.systemImage)
+                                        Text(type.rawValue)
+                                    }
+                                    .tag(type)
+                                }
+                            }
+                            .pickerStyle(MenuPickerStyle())
+                        }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Directory Path")
+                                .font(.subheadline)
+                            HStack(spacing: 8) {
+                                TextField("Enter or browse for path", text: $directoryPath)
+                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+
+                                Button("Browse...") {
+                                    showingFileImporter = true
+                                }
+                                .buttonStyle(BorderedButtonStyle())
+                            }
+                        }
+                    }
+                    .padding()
+                    .background(Color(.controlBackgroundColor).opacity(0.5))
+                    .cornerRadius(8)
+                }
+                .padding()
+            }
+            .fileImporter(
+                isPresented: $showingFileImporter,
+                allowedContentTypes: [.folder],
+                allowsMultipleSelection: false
+            ) { result in
+                switch result {
+                case .success(let urls):
+                    if let url = urls.first {
+                        directoryPath = url.path
+                        if directoryName.isEmpty {
+                            directoryName = url.lastPathComponent
+                        }
+                    }
+                case .failure(let error):
+                    print("File selection error: \(error)")
+                }
+            }
+        }
+        .background(Color(.windowBackgroundColor))
+        .frame(minWidth: 550, idealWidth: 600, maxWidth: 700, minHeight: 450, idealHeight: 500, maxHeight: 600)
+    }
+
+    private func saveDirectory() {
+        let updatedDirectory = AppDirectory(
+            id: directory.id,
+            name: directoryName,
+            path: directoryPath,
+            type: selectedType
+        )
+
+        onSave(updatedDirectory)
         presentationMode.wrappedValue.dismiss()
     }
 }
