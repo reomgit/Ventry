@@ -12,7 +12,6 @@ struct FolderBrowserGridView<ContextMenu: View>: View {
 
     @State private var hoveredItem: FolderBrowserItem?
     @State private var dropTargetItemID: UUID?
-    @State private var pointerDownItemID: UUID?
     @Namespace private var dragContainerNamespace
 
     private let gridColumns = [
@@ -32,19 +31,11 @@ struct FolderBrowserGridView<ContextMenu: View>: View {
                     .onTapGesture(count: 2) {
                         onItemDoubleClick(item)
                     }
-                    .simultaneousGesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { _ in
-                                guard pointerDownItemID != item.id else { return }
-                                pointerDownItemID = item.id
-                                let commandPressed = NSEvent.modifierFlags.contains(.command)
-                                onItemClick(item, commandPressed)
-                            }
-                            .onEnded { _ in
-                                if pointerDownItemID == item.id {
-                                    pointerDownItemID = nil
-                                }
-                            }
+                    .highPriorityGesture(
+                        TapGesture(count: 1).onEnded {
+                            let commandPressed = NSEvent.modifierFlags.contains(.command)
+                            onItemClick(item, commandPressed)
+                        }
                     )
                     .onHover { hovering in
                         hoveredItem = hovering ? item : nil
@@ -53,6 +44,7 @@ struct FolderBrowserGridView<ContextMenu: View>: View {
                         let itemsForMenu = selectedItems.contains(item) ? Array(selectedItems) : [item]
                         contextMenuBuilder(itemsForMenu)
                     }
+                    .contentShape(Rectangle())
                     #if compiler(>=5.3) && $NonescapableTypes
                     .draggable(
                         containerItemID: item.url.standardizedFileURL,

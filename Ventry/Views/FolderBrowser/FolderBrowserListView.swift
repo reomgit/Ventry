@@ -14,24 +14,28 @@ struct FolderBrowserListView<ContextMenu: View>: View {
     @Namespace private var dragContainerNamespace
 
     var body: some View {
-        List(selection: Binding(
-            get: { selectedItems },
-            set: { selectedItems = $0 }
-        )) {
+        List {
             ForEach(items) { item in
                 ListItemView(
                     item: item,
+                    isSelected: selectedItems.contains(item),
                     isDropTargeted: dropTargetItemID == item.id
                 )
-                    .tag(item)
                     .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
                     .onTapGesture(count: 2) {
                         onItemDoubleClick(item)
                     }
+                    .highPriorityGesture(
+                        TapGesture(count: 1).onEnded {
+                            let commandPressed = NSEvent.modifierFlags.contains(.command)
+                            onItemClick(item, commandPressed)
+                        }
+                    )
                     .contextMenu {
                         let itemsForMenu = selectedItems.contains(item) ? Array(selectedItems) : [item]
                         contextMenuBuilder(itemsForMenu)
                     }
+                    .contentShape(Rectangle())
                     #if compiler(>=5.3) && $NonescapableTypes
                     .draggable(
                         containerItemID: item.url.standardizedFileURL,
@@ -77,6 +81,7 @@ struct FolderBrowserListView<ContextMenu: View>: View {
 
 private struct ListItemView: View {
     let item: FolderBrowserItem
+    let isSelected: Bool
     let isDropTargeted: Bool
 
     var body: some View {
@@ -111,7 +116,17 @@ private struct ListItemView: View {
         .padding(.vertical, 2)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isDropTargeted ? Color.accentColor.opacity(0.15) : Color.clear)
+                .fill(backgroundColor)
         )
+    }
+
+    private var backgroundColor: Color {
+        if isDropTargeted {
+            return Color.accentColor.opacity(0.15)
+        }
+        if isSelected {
+            return Color.accentColor.opacity(0.12)
+        }
+        return Color.clear
     }
 }

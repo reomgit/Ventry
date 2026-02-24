@@ -8,9 +8,12 @@ class FolderBrowserViewModel: ObservableObject {
     @Published var items: [FolderBrowserItem] = []
     @Published var selectedItems: Set<FolderBrowserItem> = []
     @Published var errorMessage: String?
+    @Published var requiresPermission = false
+    @Published var pendingPermissionPath: String?
     @Published var isLoading = false
     @Published var sortOrder: SortOrder = .nameAscending
     @Published var showHiddenFiles = false
+    private var lastSelectedURL: URL?
 
     // Navigation state
     @Published var navigationHistory: [URL] = []
@@ -34,6 +37,7 @@ class FolderBrowserViewModel: ObservableObject {
     // MARK: - Private Properties
     private var loadTask: Task<Void, Never>?
     private let fileManager = FileManager.default
+    private let permissionManager = PermissionManager.shared
 
     // MARK: - Initialization
     init() {}
@@ -102,6 +106,8 @@ class FolderBrowserViewModel: ObservableObject {
         loadTask = Task { @MainActor in
             isLoading = true
             errorMessage = nil
+            requiresPermission = false
+            pendingPermissionPath = nil
 
             // Small delay to debounce rapid navigation
             try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
@@ -124,6 +130,11 @@ class FolderBrowserViewModel: ObservableObject {
               isDirectory.boolValue else {
             errorMessage = "The path \"\(url.path)\" could not be opened."
             items = []
+            return
+        }
+
+        guard permissionManager.validatePath(url.path) else {
+            handlePermissionDenied(for: url)
             return
         }
 
@@ -160,10 +171,23 @@ class FolderBrowserViewModel: ObservableObject {
 
             items = sortItems(newItems)
             errorMessage = nil
+            requiresPermission = false
         } catch {
-            errorMessage = "Unable to read contents: \(error.localizedDescription)"
-            items = []
+            let nsError = error as NSError
+            if nsError.domain == NSCocoaErrorDomain && nsError.code == NSFileReadNoPermissionError {
+                handlePermissionDenied(for: url)
+            } else {
+                errorMessage = "Unable to read contents: \(error.localizedDescription)"
+                items = []
+            }
         }
+    }
+
+    private func handlePermissionDenied(for url: URL) {
+        requiresPermission = true
+        pendingPermissionPath = url.path
+        errorMessage = "Permission is required to access this folder."
+        items = []
     }
 
     // MARK: - Sorting
@@ -205,6 +229,7 @@ class FolderBrowserViewModel: ObservableObject {
     // MARK: - Selection Management
     func selectItem(_ item: FolderBrowserItem) {
         selectedItems = [item]
+        lastSelectedURL = item.url.standardizedFileURL
     }
 
     func toggleSelection(_ item: FolderBrowserItem) {
@@ -213,14 +238,40 @@ class FolderBrowserViewModel: ObservableObject {
         } else {
             selectedItems.insert(item)
         }
+        lastSelectedURL = item.url.standardizedFileURL
     }
 
     func selectAll() {
         selectedItems = Set(items)
+        lastSelectedURL = items.first?.url.standardizedFileURL
     }
 
     func deselectAll() {
         selectedItems.removeAll()
+        lastSelectedURL = nil
+    }
+
+    func selectRange(to item: FolderBrowserItem, additive: Bool) {
+        guard let anchorURL = lastSelectedURL else {
+            selectItem(item)
+            return
+        }
+
+        guard let anchorIndex = items.firstIndex(where: { $0.url.standardizedFileURL == anchorURL }),
+              let targetIndex = items.firstIndex(where: { $0.url.standardizedFileURL == item.url.standardizedFileURL }) else {
+            selectItem(item)
+            return
+        }
+
+        let lower = min(anchorIndex, targetIndex)
+        let upper = max(anchorIndex, targetIndex)
+        let rangeItems = Set(items[lower...upper])
+
+        if additive {
+            selectedItems.formUnion(rangeItems)
+        } else {
+            selectedItems = rangeItems
+        }
     }
 
     // MARK: - File Operations

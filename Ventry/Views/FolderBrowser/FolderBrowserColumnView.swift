@@ -11,7 +11,6 @@ struct FolderBrowserColumnView<ContextMenu: View>: View {
     let onInternalDragBegan: ([URL]) -> Void
 
     @State private var dropTargetItemID: UUID?
-    @State private var pointerDownItemID: UUID?
     @Namespace private var dragContainerNamespace
 
     private let columns = [
@@ -33,24 +32,17 @@ struct FolderBrowserColumnView<ContextMenu: View>: View {
                     .onTapGesture(count: 2) {
                         onItemDoubleClick(item)
                     }
-                    .simultaneousGesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { _ in
-                                guard pointerDownItemID != item.id else { return }
-                                pointerDownItemID = item.id
-                                let commandPressed = NSEvent.modifierFlags.contains(.command)
-                                onItemClick(item, commandPressed)
-                            }
-                            .onEnded { _ in
-                                if pointerDownItemID == item.id {
-                                    pointerDownItemID = nil
-                                }
-                            }
+                    .highPriorityGesture(
+                        TapGesture(count: 1).onEnded {
+                            let commandPressed = NSEvent.modifierFlags.contains(.command)
+                            onItemClick(item, commandPressed)
+                        }
                     )
                     .contextMenu {
                         let itemsForMenu = selectedItems.contains(item) ? Array(selectedItems) : [item]
                         contextMenuBuilder(itemsForMenu)
                     }
+                    .contentShape(Rectangle())
                     #if compiler(>=5.3) && $NonescapableTypes
                     .draggable(
                         containerItemID: item.url.standardizedFileURL,
