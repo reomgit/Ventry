@@ -112,8 +112,7 @@ struct FolderBrowserView: View {
                 FolderBrowserGridView(
                     items: viewModel.items,
                     selectedItems: $viewModel.selectedItems,
-                    onItemDoubleClick: handleItemDoubleClick,
-                    onItemClick: handleItemClick,
+                    onItemMouseDown: handleItemMouseDown,
                     contextMenuBuilder: contextMenuContent,
                     onDropOnItem: { droppedURLs, item in
                         handleDrop(droppedURLs, onto: item.url)
@@ -125,8 +124,7 @@ struct FolderBrowserView: View {
                 FolderBrowserListView(
                     items: viewModel.items,
                     selectedItems: $viewModel.selectedItems,
-                    onItemDoubleClick: handleItemDoubleClick,
-                    onItemClick: handleItemClick,
+                    onItemMouseDown: handleItemMouseDown,
                     contextMenuBuilder: contextMenuContent,
                     onDropOnItem: { droppedURLs, item in
                         handleDrop(droppedURLs, onto: item.url)
@@ -138,8 +136,7 @@ struct FolderBrowserView: View {
                 FolderBrowserColumnView(
                     items: viewModel.items,
                     selectedItems: $viewModel.selectedItems,
-                    onItemDoubleClick: handleItemDoubleClick,
-                    onItemClick: handleItemClick,
+                    onItemMouseDown: handleItemMouseDown,
                     contextMenuBuilder: contextMenuContent,
                     onDropOnItem: { droppedURLs, item in
                         handleDrop(droppedURLs, onto: item.url)
@@ -149,7 +146,11 @@ struct FolderBrowserView: View {
                 )
             }
         }
-        .quickLookPreview(items: viewModel.items, selectedItems: $viewModel.selectedItems)
+        .quickLookPreview(
+            items: viewModel.items,
+            selectedItems: $viewModel.selectedItems,
+            onArrowNavigation: handleArrowNavigation
+        )
         .background(
             Group {
                 // Delete key shortcut
@@ -174,6 +175,22 @@ struct FolderBrowserView: View {
                 .hidden()
             }
         )
+        .onKeyPress(.upArrow) {
+            handleArrowNavigation(step: -1)
+            return .handled
+        }
+        .onKeyPress(.leftArrow) {
+            handleArrowNavigation(step: -1)
+            return .handled
+        }
+        .onKeyPress(.downArrow) {
+            handleArrowNavigation(step: 1)
+            return .handled
+        }
+        .onKeyPress(.rightArrow) {
+            handleArrowNavigation(step: 1)
+            return .handled
+        }
         .onDisappear {
             activeDragPaths.removeAll()
         }
@@ -259,12 +276,34 @@ struct FolderBrowserView: View {
     }
 
     // MARK: - Event Handlers
-    private func handleItemClick(_ item: FolderBrowserItem, isCommandKey: Bool) {
-        if isCommandKey {
-            viewModel.toggleSelection(item)
-        } else {
-            viewModel.selectItem(item)
+    private func handleItemMouseDown(_ item: FolderBrowserItem, event: NSEvent) {
+        if event.clickCount == 2 {
+            if !viewModel.selectedItems.contains(item) {
+                viewModel.selectItem(item)
+            }
+            handleItemDoubleClick(item)
+            return
         }
+
+        let isCommand = event.modifierFlags.contains(.command)
+        let isShift = event.modifierFlags.contains(.shift)
+
+        if isShift {
+            viewModel.selectRange(to: item, additive: isCommand)
+            return
+        }
+
+        if isCommand {
+            viewModel.toggleSelection(item)
+            return
+        }
+
+        if viewModel.selectedItems.contains(item), viewModel.selectedItems.count > 1 {
+            // Keep multiselection intact so drag can begin from any selected item.
+            return
+        }
+
+        viewModel.selectItem(item)
     }
 
     private func handleItemDoubleClick(_ item: FolderBrowserItem) {
@@ -281,6 +320,10 @@ struct FolderBrowserView: View {
         guard let item = viewModel.selectedItems.first,
               viewModel.selectedItems.count == 1 else { return }
         viewModel.openFile(item: item)
+    }
+
+    private func handleArrowNavigation(step: Int) {
+        viewModel.moveSelection(by: step)
     }
 
     private func handleInternalDragBegan(_ draggedURLs: [URL]) {

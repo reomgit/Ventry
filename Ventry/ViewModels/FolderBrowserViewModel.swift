@@ -200,25 +200,47 @@ class FolderBrowserViewModel: ObservableObject {
 
             switch sortOrder {
             case .nameAscending:
-                return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+                return nameAscending(lhs, rhs)
             case .nameDescending:
-                return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedDescending
+                return !nameAscending(lhs, rhs)
             case .sizeAscending:
-                return (lhs.fileSize ?? 0) < (rhs.fileSize ?? 0)
+                if lhs.fileSize != rhs.fileSize {
+                    return (lhs.fileSize ?? 0) < (rhs.fileSize ?? 0)
+                }
+                return nameAscending(lhs, rhs)
             case .sizeDescending:
-                return (lhs.fileSize ?? 0) > (rhs.fileSize ?? 0)
+                if lhs.fileSize != rhs.fileSize {
+                    return (lhs.fileSize ?? 0) > (rhs.fileSize ?? 0)
+                }
+                return nameAscending(lhs, rhs)
             case .dateAscending:
-                guard let lhsDate = lhs.modificationDate, let rhsDate = rhs.modificationDate else {
+                switch (lhs.modificationDate, rhs.modificationDate) {
+                case let (left?, right?) where left != right:
+                    return left < right
+                case (nil, _?):
                     return false
+                case (_?, nil):
+                    return true
+                default:
+                    return nameAscending(lhs, rhs)
                 }
-                return lhsDate < rhsDate
             case .dateDescending:
-                guard let lhsDate = lhs.modificationDate, let rhsDate = rhs.modificationDate else {
+                switch (lhs.modificationDate, rhs.modificationDate) {
+                case let (left?, right?) where left != right:
+                    return left > right
+                case (nil, _?):
                     return false
+                case (_?, nil):
+                    return true
+                default:
+                    return nameAscending(lhs, rhs)
                 }
-                return lhsDate > rhsDate
             }
         }
+    }
+
+    private func nameAscending(_ lhs: FolderBrowserItem, _ rhs: FolderBrowserItem) -> Bool {
+        lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
     }
 
     func setSortOrder(_ order: SortOrder) {
@@ -272,6 +294,30 @@ class FolderBrowserViewModel: ObservableObject {
         } else {
             selectedItems = rangeItems
         }
+        lastSelectedURL = item.url.standardizedFileURL
+    }
+
+    /// Move selection by one or more rows in the current sorted `items` list.
+    func moveSelection(by offset: Int) {
+        guard !items.isEmpty, offset != 0 else { return }
+
+        let selectedIndex: Int?
+        if let lastSelectedURL {
+            selectedIndex = items.firstIndex {
+                $0.url.standardizedFileURL == lastSelectedURL
+            }
+        } else if let firstSelected = selectedItems.first {
+            selectedIndex = items.firstIndex {
+                $0.url.standardizedFileURL == firstSelected.url.standardizedFileURL
+            }
+        } else {
+            selectedIndex = nil
+        }
+
+        let currentIndex = selectedIndex ?? (offset > 0 ? -1 : items.count)
+        let nextIndex = min(max(currentIndex + offset, 0), items.count - 1)
+
+        selectItem(items[nextIndex])
     }
 
     // MARK: - File Operations

@@ -5,6 +5,7 @@ import Quartz
 struct QuickLookPreview: NSViewRepresentable {
     let urls: [URL]
     @Binding var isPresented: Bool
+    let onArrowNavigation: (Int) -> Void
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
@@ -26,7 +27,11 @@ struct QuickLookPreview: NSViewRepresentable {
         guard let panel = QLPreviewPanel.shared() else { return }
 
         // Always update the coordinator with latest URLs
-        let coordinator = QuickLookCoordinator(urls: urls, isPresented: $isPresented)
+        let coordinator = QuickLookCoordinator(
+            urls: urls,
+            isPresented: $isPresented,
+            onArrowNavigation: onArrowNavigation
+        )
         panel.dataSource = coordinator
         panel.delegate = coordinator
 
@@ -48,10 +53,16 @@ struct QuickLookPreview: NSViewRepresentable {
 class QuickLookCoordinator: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDelegate {
     let urls: [URL]
     @Binding var isPresented: Bool
+    let onArrowNavigation: (Int) -> Void
 
-    init(urls: [URL], isPresented: Binding<Bool>) {
+    init(
+        urls: [URL],
+        isPresented: Binding<Bool>,
+        onArrowNavigation: @escaping (Int) -> Void
+    ) {
         self.urls = urls
         self._isPresented = isPresented
+        self.onArrowNavigation = onArrowNavigation
         super.init()
     }
 
@@ -66,7 +77,28 @@ class QuickLookCoordinator: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDe
 
     // MARK: - QLPreviewPanelDelegate
     func previewPanel(_ panel: QLPreviewPanel!, handle event: NSEvent!) -> Bool {
-        // Allow the panel to handle events
+        guard let event else { return false }
+        guard event.type == .keyDown else { return false }
+
+        // Keep existing Quick Look behavior for explicit multi-select previews.
+        guard urls.count <= 1 else { return false }
+        guard !event.modifierFlags.contains(.command),
+              !event.modifierFlags.contains(.option),
+              !event.modifierFlags.contains(.control) else {
+            return false
+        }
+
+        switch Int(event.keyCode) {
+        case 123, 126: // Left / Up
+            onArrowNavigation(-1)
+            return true
+        case 124, 125: // Right / Down
+            onArrowNavigation(1)
+            return true
+        default:
+            break
+        }
+
         return false
     }
 
@@ -84,14 +116,22 @@ class QuickLookCoordinator: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDe
 struct QuickLookModifier: ViewModifier {
     let items: [FolderBrowserItem]
     @Binding var selectedItems: Set<FolderBrowserItem>
+    let onArrowNavigation: (Int) -> Void
     @State private var showPreview = false
+
+    private var orderedSelectedURLs: [URL] {
+        items
+            .filter { selectedItems.contains($0) }
+            .map(\.url)
+    }
 
     func body(content: Content) -> some View {
         content
             .background(
                 QuickLookPreview(
-                    urls: Array(selectedItems).map { $0.url },
-                    isPresented: $showPreview
+                    urls: orderedSelectedURLs,
+                    isPresented: $showPreview,
+                    onArrowNavigation: onArrowNavigation
                 )
                 .frame(width: 0, height: 0)
                 .opacity(0)
@@ -108,8 +148,15 @@ struct QuickLookModifier: ViewModifier {
 extension View {
     func quickLookPreview(
         items: [FolderBrowserItem],
-        selectedItems: Binding<Set<FolderBrowserItem>>
+        selectedItems: Binding<Set<FolderBrowserItem>>,
+        onArrowNavigation: @escaping (Int) -> Void = { _ in }
     ) -> some View {
-        modifier(QuickLookModifier(items: items, selectedItems: selectedItems))
+        modifier(
+            QuickLookModifier(
+                items: items,
+                selectedItems: selectedItems,
+                onArrowNavigation: onArrowNavigation
+            )
+        )
     }
 }

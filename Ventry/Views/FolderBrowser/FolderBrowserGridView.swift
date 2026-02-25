@@ -3,8 +3,7 @@ import SwiftUI
 struct FolderBrowserGridView<ContextMenu: View>: View {
     let items: [FolderBrowserItem]
     @Binding var selectedItems: Set<FolderBrowserItem>
-    let onItemDoubleClick: (FolderBrowserItem) -> Void
-    let onItemClick: (FolderBrowserItem, _ isCommandKey: Bool) -> Void
+    let onItemMouseDown: (FolderBrowserItem, NSEvent) -> Void
     let contextMenuBuilder: ([FolderBrowserItem]) -> ContextMenu
     let onDropOnItem: ([URL], FolderBrowserItem) -> Bool
     let onDropInCurrentDirectory: ([URL]) -> Bool
@@ -14,78 +13,82 @@ struct FolderBrowserGridView<ContextMenu: View>: View {
     @State private var dropTargetItemID: UUID?
     @Namespace private var dragContainerNamespace
 
-    private let gridColumns = [
-        GridItem(.adaptive(minimum: 100, maximum: 120), spacing: 16)
-    ]
-
     var body: some View {
-        ScrollView {
-            LazyVGrid(columns: gridColumns, spacing: 16) {
-                ForEach(items) { item in
-                    GridItemView(
-                        item: item,
-                        isSelected: selectedItems.contains(item),
-                        isHovered: hoveredItem == item,
-                        isDropTargeted: dropTargetItemID == item.id
-                    )
-                    .onTapGesture(count: 2) {
-                        onItemDoubleClick(item)
-                    }
-                    .highPriorityGesture(
-                        TapGesture(count: 1).onEnded {
-                            let commandPressed = NSEvent.modifierFlags.contains(.command)
-                            onItemClick(item, commandPressed)
+        GeometryReader { geometry in
+            let isCompact = geometry.size.width < 760
+            let columns = responsiveColumns(for: geometry.size.width, compact: isCompact)
+
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: isCompact ? 12 : 16) {
+                    ForEach(items) { item in
+                        GridItemView(
+                            item: item,
+                            isSelected: selectedItems.contains(item),
+                            isHovered: hoveredItem == item,
+                            isDropTargeted: dropTargetItemID == item.id,
+                            isCompact: isCompact
+                        )
+                        .overlay {
+                            MouseEventCaptureView { event in
+                                onItemMouseDown(item, event)
+                            }
                         }
-                    )
-                    .onHover { hovering in
-                        hoveredItem = hovering ? item : nil
-                    }
-                    .contextMenu {
-                        let itemsForMenu = selectedItems.contains(item) ? Array(selectedItems) : [item]
-                        contextMenuBuilder(itemsForMenu)
-                    }
-                    .contentShape(Rectangle())
-                    #if compiler(>=5.3) && $NonescapableTypes
-                    .draggable(
-                        containerItemID: item.url.standardizedFileURL,
-                        containerNamespace: dragContainerNamespace
-                    )
-                    #else
-                    .onDrag {
-                        let draggedURLs: [URL] = selectedItems.contains(item)
-                            ? selectedItems.map { $0.url.standardizedFileURL }
-                            : [item.url.standardizedFileURL]
-                        onInternalDragBegan(draggedURLs)
-                        return NSItemProvider(object: item.url.standardizedFileURL as NSURL)
-                    }
-                    #endif
-                    .dropDestination(for: URL.self) { droppedURLs, _ in
-                        guard item.isDirectory else { return false }
-                        return onDropOnItem(droppedURLs, item)
-                    } isTargeted: { isTargeted in
-                        if isTargeted {
-                            dropTargetItemID = item.id
-                        } else if dropTargetItemID == item.id {
-                            dropTargetItemID = nil
+                        .onHover { hovering in
+                            hoveredItem = hovering ? item : nil
+                        }
+                        .contextMenu {
+                            let itemsForMenu = selectedItems.contains(item) ? Array(selectedItems) : [item]
+                            contextMenuBuilder(itemsForMenu)
+                        }
+                        .contentShape(Rectangle())
+                        #if compiler(>=5.3) && $NonescapableTypes
+                        .draggable(
+                            containerItemID: item.url.standardizedFileURL,
+                            containerNamespace: dragContainerNamespace
+                        )
+                        #else
+                        .onDrag {
+                            let draggedURLs: [URL] = selectedItems.contains(item)
+                                ? selectedItems.map { $0.url.standardizedFileURL }
+                                : [item.url.standardizedFileURL]
+                            onInternalDragBegan(draggedURLs)
+                            return NSItemProvider(object: item.url.standardizedFileURL as NSURL)
+                        }
+                        #endif
+                        .dropDestination(for: URL.self) { droppedURLs, _ in
+                            guard item.isDirectory else { return false }
+                            return onDropOnItem(droppedURLs, item)
+                        } isTargeted: { isTargeted in
+                            if isTargeted {
+                                dropTargetItemID = item.id
+                            } else if dropTargetItemID == item.id {
+                                dropTargetItemID = nil
+                            }
                         }
                     }
                 }
+                .padding(isCompact ? 10 : 16)
             }
-            .padding()
+            #if compiler(>=5.3) && $NonescapableTypes
+            .dragContainerSelection(
+                Array(selectedItems.map { $0.url.standardizedFileURL }),
+                containerNamespace: dragContainerNamespace
+            )
+            .dragContainer(for: FolderBrowserDraggedItem.self, in: dragContainerNamespace) { draggedItemIDs in
+                onInternalDragBegan(draggedItemIDs)
+                return draggedItemIDs.map { FolderBrowserDraggedItem(url: $0) }
+            }
+            #endif
+            .dropDestination(for: URL.self) { droppedURLs, _ in
+                return onDropInCurrentDirectory(droppedURLs)
+            }
         }
-        #if compiler(>=5.3) && $NonescapableTypes
-        .dragContainerSelection(
-            Array(selectedItems.map { $0.url.standardizedFileURL }),
-            containerNamespace: dragContainerNamespace
-        )
-        .dragContainer(for: FolderBrowserDraggedItem.self, in: dragContainerNamespace) { draggedItemIDs in
-            onInternalDragBegan(draggedItemIDs)
-            return draggedItemIDs.map { FolderBrowserDraggedItem(url: $0) }
-        }
-        #endif
-        .dropDestination(for: URL.self) { droppedURLs, _ in
-            return onDropInCurrentDirectory(droppedURLs)
-        }
+    }
+
+    private func responsiveColumns(for width: CGFloat, compact: Bool) -> [GridItem] {
+        let minimum: CGFloat = compact ? 92 : 110
+        let maximum: CGFloat = compact ? 120 : 140
+        return [GridItem(.adaptive(minimum: minimum, maximum: maximum), spacing: compact ? 12 : 16)]
     }
 }
 
@@ -94,9 +97,15 @@ private struct GridItemView: View {
     let isSelected: Bool
     let isHovered: Bool
     let isDropTargeted: Bool
+    let isCompact: Bool
 
     var body: some View {
-        VStack(spacing: 6) {
+        let iconFrame: CGFloat = isCompact ? 68 : 80
+        let iconSize: CGFloat = isCompact ? 34 : 40
+        let tileWidth: CGFloat = isCompact ? 92 : 100
+        let tileHeight: CGFloat = isCompact ? 108 : 120
+
+        VStack(spacing: isCompact ? 4 : 6) {
             // Icon
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
@@ -105,10 +114,10 @@ private struct GridItemView: View {
                         ? Color.accentColor.opacity(0.2)
                         : (isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
                     )
-                    .frame(width: 80, height: 80)
+                    .frame(width: iconFrame, height: iconFrame)
 
                 Image(systemName: item.iconName)
-                    .font(.system(size: 40))
+                    .font(.system(size: iconSize))
                     .foregroundColor(item.iconColor)
                     .symbolRenderingMode(.hierarchical)
             }
@@ -126,13 +135,13 @@ private struct GridItemView: View {
 
             // Name
             Text(item.displayName)
-                .font(.system(size: 11))
+                .font(.system(size: isCompact ? 10 : 11))
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
                 .foregroundColor(.primary)
-                .frame(width: 100)
+                .frame(width: tileWidth)
                 .padding(.horizontal, 4)
         }
-        .frame(width: 100, height: 120)
+        .frame(width: tileWidth, height: tileHeight)
     }
 }
