@@ -1,11 +1,18 @@
 import SwiftUI
 import Quartz
 
+enum ArrowNavigationDirection {
+    case up
+    case down
+    case left
+    case right
+}
+
 /// Quick Look preview panel wrapper for SwiftUI
 struct QuickLookPreview: NSViewRepresentable {
     let urls: [URL]
     @Binding var isPresented: Bool
-    let onArrowNavigation: (Int) -> Void
+    let onArrowNavigation: (ArrowNavigationDirection) -> Void
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
@@ -53,12 +60,12 @@ struct QuickLookPreview: NSViewRepresentable {
 class QuickLookCoordinator: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDelegate {
     let urls: [URL]
     @Binding var isPresented: Bool
-    let onArrowNavigation: (Int) -> Void
+    let onArrowNavigation: (ArrowNavigationDirection) -> Void
 
     init(
         urls: [URL],
         isPresented: Binding<Bool>,
-        onArrowNavigation: @escaping (Int) -> Void
+        onArrowNavigation: @escaping (ArrowNavigationDirection) -> Void
     ) {
         self.urls = urls
         self._isPresented = isPresented
@@ -89,11 +96,17 @@ class QuickLookCoordinator: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDe
         }
 
         switch Int(event.keyCode) {
-        case 123, 126: // Left / Up
-            onArrowNavigation(-1)
+        case 123: // Left
+            onArrowNavigation(.left)
             return true
-        case 124, 125: // Right / Down
-            onArrowNavigation(1)
+        case 124: // Right
+            onArrowNavigation(.right)
+            return true
+        case 125: // Down
+            onArrowNavigation(.down)
+            return true
+        case 126: // Up
+            onArrowNavigation(.up)
             return true
         default:
             break
@@ -116,7 +129,7 @@ class QuickLookCoordinator: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDe
 struct QuickLookModifier: ViewModifier {
     let items: [FolderBrowserItem]
     @Binding var selectedItems: Set<FolderBrowserItem>
-    let onArrowNavigation: (Int) -> Void
+    let onArrowNavigation: (ArrowNavigationDirection) -> Void
     @State private var showPreview = false
 
     private var orderedSelectedURLs: [URL] {
@@ -149,7 +162,7 @@ extension View {
     func quickLookPreview(
         items: [FolderBrowserItem],
         selectedItems: Binding<Set<FolderBrowserItem>>,
-        onArrowNavigation: @escaping (Int) -> Void = { _ in }
+        onArrowNavigation: @escaping (ArrowNavigationDirection) -> Void = { _ in }
     ) -> some View {
         modifier(
             QuickLookModifier(

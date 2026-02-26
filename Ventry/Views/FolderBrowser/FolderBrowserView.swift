@@ -1,4 +1,5 @@
 import SwiftUI
+import Quartz
 
 struct FolderBrowserView: View {
     let title: String
@@ -14,6 +15,8 @@ struct FolderBrowserView: View {
     @State private var renameText = ""
     @State private var errorAlert: ErrorAlert?
     @State private var activeDragPaths: Set<String> = []
+    @State private var gridColumnCount = 1
+    @State private var keyboardMonitor: Any?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -64,10 +67,14 @@ struct FolderBrowserView: View {
         }
         .navigationTitle(title)
         .onAppear {
+            startKeyboardMonitor()
             if viewModel.currentDirectory == nil {
                 let url = URL(fileURLWithPath: path)
                 viewModel.navigateTo(url: url)
             }
+        }
+        .onDisappear {
+            stopKeyboardMonitor()
         }
         .onChange(of: path) { _, newPath in
             let url = URL(fileURLWithPath: newPath)
@@ -113,6 +120,9 @@ struct FolderBrowserView: View {
                     items: viewModel.items,
                     selectedItems: $viewModel.selectedItems,
                     onItemMouseDown: handleItemMouseDown,
+                    onColumnCountChange: { columnCount in
+                        gridColumnCount = max(1, columnCount)
+                    },
                     contextMenuBuilder: contextMenuContent,
                     onDropOnItem: { droppedURLs, item in
                         handleDrop(droppedURLs, onto: item.url)
@@ -176,19 +186,19 @@ struct FolderBrowserView: View {
             }
         )
         .onKeyPress(.upArrow) {
-            handleArrowNavigation(step: -1)
+            handleArrowNavigation(.up)
             return .handled
         }
         .onKeyPress(.leftArrow) {
-            handleArrowNavigation(step: -1)
+            handleArrowNavigation(.left)
             return .handled
         }
         .onKeyPress(.downArrow) {
-            handleArrowNavigation(step: 1)
+            handleArrowNavigation(.down)
             return .handled
         }
         .onKeyPress(.rightArrow) {
-            handleArrowNavigation(step: 1)
+            handleArrowNavigation(.right)
             return .handled
         }
         .onDisappear {
@@ -322,8 +332,85 @@ struct FolderBrowserView: View {
         viewModel.openFile(item: item)
     }
 
-    private func handleArrowNavigation(step: Int) {
-        viewModel.moveSelection(by: step)
+    private func handleArrowNavigation(_ direction: ArrowNavigationDirection) {
+        switch viewMode {
+        case .grid:
+            switch direction {
+            case .left:
+                viewModel.moveSelection(by: -1)
+            case .right:
+                viewModel.moveSelection(by: 1)
+            case .up:
+                viewModel.moveSelection(by: -gridColumnCount)
+            case .down:
+                viewModel.moveSelection(by: gridColumnCount)
+            }
+        case .list, .column:
+            switch direction {
+            case .up, .left:
+                viewModel.moveSelection(by: -1)
+            case .down, .right:
+                viewModel.moveSelection(by: 1)
+            }
+        }
+    }
+
+    private func startKeyboardMonitor() {
+        guard keyboardMonitor == nil else { return }
+
+        keyboardMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard shouldHandleArrowEvent(event) else { return event }
+
+            switch Int(event.keyCode) {
+            case 123:
+                handleArrowNavigation(.left)
+                return nil
+            case 124:
+                handleArrowNavigation(.right)
+                return nil
+            case 125:
+                handleArrowNavigation(.down)
+                return nil
+            case 126:
+                handleArrowNavigation(.up)
+                return nil
+            default:
+                return event
+            }
+        }
+    }
+
+    private func stopKeyboardMonitor() {
+        if let keyboardMonitor {
+            NSEvent.removeMonitor(keyboardMonitor)
+            self.keyboardMonitor = nil
+        }
+    }
+
+    private func shouldHandleArrowEvent(_ event: NSEvent) -> Bool {
+        guard !viewModel.selectedItems.isEmpty else { return false }
+
+        // Let Quick Look keep native multi-item left/right cycling behavior.
+        if QLPreviewPanel.sharedPreviewPanelExists(),
+           let panel = QLPreviewPanel.shared(),
+           panel.isVisible,
+           viewModel.selectedItems.count > 1 {
+            return false
+        }
+
+        guard !event.modifierFlags.contains(.command),
+              !event.modifierFlags.contains(.option),
+              !event.modifierFlags.contains(.control),
+              !event.modifierFlags.contains(.shift) else {
+            return false
+        }
+
+        guard let window = event.window else { return false }
+        if window.firstResponder is NSTextView {
+            return false
+        }
+
+        return [123, 124, 125, 126].contains(Int(event.keyCode))
     }
 
     private func handleInternalDragBegan(_ draggedURLs: [URL]) {

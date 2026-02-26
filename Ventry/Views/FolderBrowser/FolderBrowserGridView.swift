@@ -4,6 +4,7 @@ struct FolderBrowserGridView<ContextMenu: View>: View {
     let items: [FolderBrowserItem]
     @Binding var selectedItems: Set<FolderBrowserItem>
     let onItemMouseDown: (FolderBrowserItem, NSEvent) -> Void
+    let onColumnCountChange: (Int) -> Void
     let contextMenuBuilder: ([FolderBrowserItem]) -> ContextMenu
     let onDropOnItem: ([URL], FolderBrowserItem) -> Bool
     let onDropInCurrentDirectory: ([URL]) -> Bool
@@ -17,6 +18,7 @@ struct FolderBrowserGridView<ContextMenu: View>: View {
         GeometryReader { geometry in
             let isCompact = geometry.size.width < 760
             let columns = responsiveColumns(for: geometry.size.width, compact: isCompact)
+            let columnCount = calculatedColumnCount(for: geometry.size.width, compact: isCompact)
 
             ScrollView {
                 LazyVGrid(columns: columns, spacing: isCompact ? 12 : 16) {
@@ -82,6 +84,12 @@ struct FolderBrowserGridView<ContextMenu: View>: View {
             .dropDestination(for: URL.self) { droppedURLs, _ in
                 return onDropInCurrentDirectory(droppedURLs)
             }
+            .onAppear {
+                onColumnCountChange(columnCount)
+            }
+            .onChange(of: geometry.size.width) { _, newWidth in
+                onColumnCountChange(calculatedColumnCount(for: newWidth, compact: isCompact))
+            }
         }
     }
 
@@ -89,6 +97,13 @@ struct FolderBrowserGridView<ContextMenu: View>: View {
         let minimum: CGFloat = compact ? 92 : 110
         let maximum: CGFloat = compact ? 120 : 140
         return [GridItem(.adaptive(minimum: minimum, maximum: maximum), spacing: compact ? 12 : 16)]
+    }
+
+    private func calculatedColumnCount(for width: CGFloat, compact: Bool) -> Int {
+        let minimum: CGFloat = compact ? 92 : 110
+        let spacing: CGFloat = compact ? 12 : 16
+        let available = max(width, minimum)
+        return max(1, Int((available + spacing) / (minimum + spacing)))
     }
 }
 

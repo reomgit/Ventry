@@ -127,6 +127,18 @@ struct SidebarView: View {
         }
         .navigationTitle("Library")
         .listStyle(SidebarListStyle())
+        .onKeyPress(.upArrow) {
+            return .handled
+        }
+        .onKeyPress(.downArrow) {
+            return .handled
+        }
+        .onKeyPress(.leftArrow) {
+            return .handled
+        }
+        .onKeyPress(.rightArrow) {
+            return .handled
+        }
         .alert("Remove App From Ventry?", isPresented: $showingDeleteApplicationAlert, presenting: pendingDeleteApplication) { app in
             Button("Remove App", role: .destructive) {
                 appState.removeApplication(app)
