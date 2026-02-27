@@ -4,6 +4,7 @@ struct FolderBrowserColumnView<ContextMenu: View>: View {
     let items: [FolderBrowserItem]
     @Binding var selectedItems: Set<FolderBrowserItem>
     let onItemMouseDown: (FolderBrowserItem, NSEvent) -> Void
+    let onColumnCountChange: (Int) -> Void
     let contextMenuBuilder: ([FolderBrowserItem]) -> ContextMenu
     let onDropOnItem: ([URL], FolderBrowserItem) -> Bool
     let onDropInCurrentDirectory: ([URL]) -> Bool
@@ -14,7 +15,8 @@ struct FolderBrowserColumnView<ContextMenu: View>: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let columns = responsiveColumns(for: geometry.size.width)
+            let columnCount = calculatedColumnCount(for: geometry.size.width)
+            let columns = responsiveColumns(for: columnCount)
             let compact = geometry.size.width < 720
 
             ScrollView {
@@ -77,21 +79,28 @@ struct FolderBrowserColumnView<ContextMenu: View>: View {
             .dropDestination(for: URL.self) { droppedURLs, _ in
                 return onDropInCurrentDirectory(droppedURLs)
             }
+            .onAppear {
+                onColumnCountChange(columnCount)
+            }
+            .onChange(of: columnCount) { _, newColumnCount in
+                onColumnCountChange(newColumnCount)
+            }
         }
     }
 
-    private func responsiveColumns(for width: CGFloat) -> [GridItem] {
-        let count: Int
+    private func calculatedColumnCount(for width: CGFloat) -> Int {
         if width < 620 {
-            count = 1
+            return 1
         } else if width < 940 {
-            count = 2
+            return 2
         } else if width < 1260 {
-            count = 3
+            return 3
         } else {
-            count = 4
+            return 4
         }
+    }
 
+    private func responsiveColumns(for count: Int) -> [GridItem] {
         return Array(repeating: GridItem(.flexible(minimum: 150), spacing: 16), count: count)
     }
 }

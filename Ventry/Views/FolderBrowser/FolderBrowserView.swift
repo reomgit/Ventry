@@ -16,6 +16,7 @@ struct FolderBrowserView: View {
     @State private var errorAlert: ErrorAlert?
     @State private var activeDragPaths: Set<String> = []
     @State private var gridColumnCount = 1
+    @State private var columnViewColumnCount = 1
     @State private var keyboardMonitor: Any?
 
     var body: some View {
@@ -147,6 +148,9 @@ struct FolderBrowserView: View {
                     items: viewModel.items,
                     selectedItems: $viewModel.selectedItems,
                     onItemMouseDown: handleItemMouseDown,
+                    onColumnCountChange: { columnCount in
+                        columnViewColumnCount = max(1, columnCount)
+                    },
                     contextMenuBuilder: contextMenuContent,
                     onDropOnItem: { droppedURLs, item in
                         handleDrop(droppedURLs, onto: item.url)
@@ -345,12 +349,25 @@ struct FolderBrowserView: View {
             case .down:
                 viewModel.moveSelection(by: gridColumnCount)
             }
-        case .list, .column:
+        case .column:
             switch direction {
-            case .up, .left:
+            case .left:
                 viewModel.moveSelection(by: -1)
-            case .down, .right:
+            case .right:
                 viewModel.moveSelection(by: 1)
+            case .up:
+                viewModel.moveSelection(by: -columnViewColumnCount)
+            case .down:
+                viewModel.moveSelection(by: columnViewColumnCount)
+            }
+        case .list:
+            switch direction {
+            case .up:
+                viewModel.moveSelection(by: -1)
+            case .down:
+                viewModel.moveSelection(by: 1)
+            case .left, .right:
+                break
             }
         }
     }

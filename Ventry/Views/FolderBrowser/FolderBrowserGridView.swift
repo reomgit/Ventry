@@ -87,8 +87,8 @@ struct FolderBrowserGridView<ContextMenu: View>: View {
             .onAppear {
                 onColumnCountChange(columnCount)
             }
-            .onChange(of: geometry.size.width) { _, newWidth in
-                onColumnCountChange(calculatedColumnCount(for: newWidth, compact: isCompact))
+            .onChange(of: columnCount) { _, newColumnCount in
+                onColumnCountChange(newColumnCount)
             }
         }
     }
@@ -102,8 +102,9 @@ struct FolderBrowserGridView<ContextMenu: View>: View {
     private func calculatedColumnCount(for width: CGFloat, compact: Bool) -> Int {
         let minimum: CGFloat = compact ? 92 : 110
         let spacing: CGFloat = compact ? 12 : 16
-        let available = max(width, minimum)
-        return max(1, Int((available + spacing) / (minimum + spacing)))
+        let horizontalPadding: CGFloat = compact ? 10 : 16
+        let contentWidth = max(width - (horizontalPadding * 2), minimum)
+        return max(1, Int((contentWidth + spacing) / (minimum + spacing)))
     }
 }
 
