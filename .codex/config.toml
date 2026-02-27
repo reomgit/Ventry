@@ -1,0 +1,8 @@
+[features]
+rmcp_client = true
+
+[mcp_servers.linear]
+url = "https://mcp.linear.app/mcp"
+
+[projects."/Users/reom/dev/applications/Ventry"]
+trust_level = "trusted"
