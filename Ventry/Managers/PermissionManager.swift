@@ -211,6 +211,10 @@ class PermissionManager: ObservableObject {
     func validatePath(_ path: String) -> Bool {
         let url = URL(fileURLWithPath: path)
 
+        if path == AppStorageManager.shared.designAssetsDirectory.path {
+            _ = AppStorageManager.shared.prepareDesignAssetsDirectory()
+        }
+
         // Check if path exists
         guard FileManager.default.fileExists(atPath: path) else {
             print("Path does not exist: \(path)")
@@ -252,6 +256,11 @@ class PermissionManager: ObservableObject {
 
     /// Requests access to a specific path that was found to be inaccessible
     func requestAccessToPath(_ path: String) async -> Bool {
+        if path == AppStorageManager.shared.designAssetsDirectory.path,
+           AppStorageManager.shared.prepareDesignAssetsDirectory() {
+            return true
+        }
+
         let url = URL(fileURLWithPath: path)
 
         var isDirectory: ObjCBool = false

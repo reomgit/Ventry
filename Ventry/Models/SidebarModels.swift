@@ -159,12 +159,15 @@ enum TagColor: String, CaseIterable, Codable {
 
 // MARK: - Regular Folders
 enum RegularFolder: String, CaseIterable {
+    case documents = "Documents"
     case fonts = "Fonts"
     case designAssets = "Design Assets"
     case downloads = "Downloads"
 
     var systemImage: String {
         switch self {
+        case .documents:
+            return "doc.text"
         case .fonts:
             return "textformat"
         case .designAssets:
@@ -178,6 +181,8 @@ enum RegularFolder: String, CaseIterable {
         let homePath = resolvedHomePath
         let resolvedPath: String
         switch self {
+        case .documents:
+            resolvedPath = AppStorageManager.shared.documentsDirectory.path
         case .fonts:
             resolvedPath = "\(homePath)/Library/Fonts"
         case .designAssets:
@@ -189,11 +194,28 @@ enum RegularFolder: String, CaseIterable {
         return resolvedPath
     }
 
+    var navigationPath: String {
+        switch self {
+        case .designAssets:
+            if AppStorageManager.shared.prepareDesignAssetsDirectory() {
+                return AppStorageManager.shared.designAssetsDirectory.path
+            }
+            return AppStorageManager.shared.documentsDirectory.path
+        default:
+            return defaultPath
+        }
+    }
+
     /// Ensures the directory exists, creating it if necessary
     func ensureDirectoryExists() {
-        let path = defaultPath
-        if !FileManager.default.fileExists(atPath: path) {
-            try? FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true, attributes: nil)
+        switch self {
+        case .designAssets:
+            _ = AppStorageManager.shared.prepareDesignAssetsDirectory()
+        default:
+            let path = defaultPath
+            if !FileManager.default.fileExists(atPath: path) {
+                try? FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true, attributes: nil)
+            }
         }
     }
 

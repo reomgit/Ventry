@@ -5,6 +5,7 @@ final class AppStorageManager {
 
     let internalRootDirectory: URL
     let collectionsDirectory: URL
+    let documentsDirectory: URL
     let designAssetsDirectory: URL
 
     private init() {
@@ -16,7 +17,8 @@ final class AppStorageManager {
 
         internalRootDirectory = applicationSupportDirectory.appendingPathComponent("Ventry", isDirectory: true)
         collectionsDirectory = internalRootDirectory.appendingPathComponent("Collections", isDirectory: true)
-        designAssetsDirectory = Self.resolvedDocumentsDirectory()
+        documentsDirectory = Self.resolvedDocumentsDirectory()
+        designAssetsDirectory = documentsDirectory
             .appendingPathComponent("Ventry", isDirectory: true)
             .appendingPathComponent("Design Assets", isDirectory: true)
     }

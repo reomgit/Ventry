@@ -261,23 +261,15 @@ class AppState: ObservableObject {
 
     // MARK: - Path Validation
 
-    /// Validates all required paths for applications, collections, and regular folders
+    /// Validates user-saved external paths that should remain accessible between launches
     func validateAllPaths() async {
         var pathsToValidate = Set<String>()
-
-        // Add /Applications path
-        pathsToValidate.insert(PermissionManager.applicationsPath)
 
         // Add all application directory paths
         for application in applications {
             for directory in application.directories {
                 pathsToValidate.insert(directory.path)
             }
-        }
-
-        // Add regular folder default paths
-        for folder in regularFolders {
-            pathsToValidate.insert(folder.defaultPath)
         }
 
         // Add starred item paths
