@@ -6,16 +6,8 @@ class CollectionManager {
     private let collectionsDirectory: URL
 
     init() {
-        // Store in ~/Documents/Ventry/Collections/ (user's real Documents, not container)
-        let homeDir = FileManager.default.homeDirectoryForCurrentUser
-        let ventryDir = homeDir.appendingPathComponent("Documents/Ventry/Collections")
-        self.collectionsDirectory = ventryDir
-
-        // Create directory if needed
-        try? FileManager.default.createDirectory(
-            at: ventryDir,
-            withIntermediateDirectories: true
-        )
+        self.collectionsDirectory = AppStorageManager.shared.collectionsDirectory
+        _ = AppStorageManager.shared.prepareDirectories()
     }
 
     func saveCollection(_ collection: Collection) throws {

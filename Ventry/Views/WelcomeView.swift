@@ -2,13 +2,8 @@ import SwiftUI
 import AppKit
 
 struct WelcomeView: View {
-    @ObservedObject var permissionManager = PermissionManager.shared
     @State private var isAnimating = false
     @State private var isSettingUp = false
-
-    private var setupStep: PermissionManager.PermissionStep {
-        permissionManager.nextRequiredPermissionStep
-    }
 
     var body: some View {
         VStack(spacing: 30) {
@@ -26,27 +21,13 @@ struct WelcomeView: View {
                 Text("Welcome to Ventry")
                     .font(.system(size: 32, weight: .bold))
 
-                if setupStep == .applications {
-                    Text("To manage your applications and assets, Ventry needs access to your Applications folder.")
-                        .font(.title3)
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: 400)
-                } else if setupStep == .documents {
-                    Text("Ventry also needs access to your Documents folder to store collections and design assets.")
-                        .font(.title3)
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: 400)
-                } else {
-                    Text("All required file access is available.")
-                        .font(.title3)
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: 400)
-                }
+                Text("Ventry keeps its internal data in Application Support, and creates your Design Assets workspace in Documents so it is easy to find in Finder.")
+                    .font(.title3)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: 500)
 
-                Text("After granting access, Ventry will validate all required paths including your Applications folder, Collections, and design asset directories to ensure everything works correctly.")
+                Text("Protected folders can still trigger macOS privacy prompts when needed, but Ventry will first try to create the Documents-based Design Assets folder automatically.")
                     .font(.callout)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.tertiary)
@@ -65,8 +46,8 @@ struct WelcomeView: View {
                         ProgressView()
                             .controlSize(.small)
                     }
-                    Image(systemName: setupStep == .applications ? "lock.open.fill" : "folder.badge.plus")
-                    Text(buttonTitle)
+                    Image(systemName: "checkmark.circle.fill")
+                    Text("Prepare Storage")
                         .fontWeight(.semibold)
                 }
                 .frame(minWidth: 200)
@@ -75,7 +56,7 @@ struct WelcomeView: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .padding(.top, 20)
-            .disabled(isSettingUp || setupStep == .complete)
+            .disabled(isSettingUp)
             
             Spacer()
             
@@ -92,38 +73,9 @@ struct WelcomeView: View {
     }
 
     private func performSetup() async {
-        if setupStep == .applications {
-            _ = await permissionManager.requestApplicationsDirectoryAccess()
-        } else if setupStep == .documents {
-            if let documentsURL = await permissionManager.requestDocumentsAccess() {
-                // Create Ventry/Design Assets folder structure
-                let ventryURL = documentsURL.appendingPathComponent("Ventry")
-                let collectionsURL = ventryURL.appendingPathComponent("Collections")
-                let designAssetsURL = ventryURL.appendingPathComponent("Design Assets")
-
-                do {
-                    // Create directories with intermediate directories
-                    try FileManager.default.createDirectory(at: collectionsURL, withIntermediateDirectories: true)
-                    try FileManager.default.createDirectory(at: designAssetsURL, withIntermediateDirectories: true)
-
-                    print("✅ Created Ventry directories:")
-                    print("  - \(collectionsURL.path)")
-                    print("  - \(designAssetsURL.path)")
-                } catch {
-                    print("❌ Failed to create Ventry directories: \(error)")
-                }
-            }
-        }
-    }
-
-    private var buttonTitle: String {
-        switch setupStep {
-        case .applications:
-            return "Grant Applications Access"
-        case .documents:
-            return "Grant Documents Access"
-        case .complete:
-            return "All Access Granted"
+        await MainActor.run {
+            _ = AppStorageManager.shared.prepareDirectories()
+            PermissionManager.shared.refreshPermissionState()
         }
     }
 }

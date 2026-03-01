@@ -276,13 +276,14 @@ class PermissionManager: ObservableObject {
     }
 
     func refreshPermissionState() {
+        let storageReady = AppStorageManager.shared.prepareDirectories()
         let applicationsAccess = hasSecurityScopedAccess(for: Self.applicationsPath)
         let documentsAccess = documentsURL.map { hasSecurityScopedAccess(for: $0.path) } ?? false
 
         DispatchQueue.main.async { [weak self] in
             self?.hasApplicationsAccess = applicationsAccess
             self?.hasDocumentsAccess = documentsAccess
-            self?.hasDirectoryAccess = applicationsAccess && documentsAccess
+            self?.hasDirectoryAccess = storageReady
         }
     }
 

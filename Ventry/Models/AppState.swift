@@ -26,17 +26,15 @@ class AppState: ObservableObject {
     
     init() {
         setupBindings()
+        _ = AppStorageManager.shared.prepareDirectories()
+        _ = AppStorageManager.shared.prepareDesignAssetsDirectory()
 
-        // Check initial access state
-        hasAccess = PermissionManager.shared.hasDirectoryAccess
+        hasAccess = true
 
-        // Only load apps if we have access
-        if hasAccess {
-            Task {
-                await loadApplicationsFromSystem()
-                await loadSavedCollections()
-                await validateAllPaths()
-            }
+        Task {
+            await loadApplicationsFromSystem()
+            await loadSavedCollections()
+            await validateAllPaths()
         }
     }
 
@@ -58,15 +56,8 @@ class AppState: ObservableObject {
     private func setupBindings() {
         PermissionManager.shared.$hasDirectoryAccess
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] hasAccess in
-                self?.hasAccess = hasAccess
-                if hasAccess {
-                    Task {
-                        await self?.loadApplicationsFromSystem()
-                        await self?.loadSavedCollections()
-                        await self?.validateAllPaths()
-                    }
-                }
+            .sink { [weak self] _ in
+                self?.hasAccess = true
             }
             .store(in: &cancellables)
             
@@ -276,10 +267,6 @@ class AppState: ObservableObject {
 
         // Add /Applications path
         pathsToValidate.insert(PermissionManager.applicationsPath)
-
-        if let documentsPath = PermissionManager.shared.documentsURL?.path {
-            pathsToValidate.insert(documentsPath)
-        }
 
         // Add all application directory paths
         for application in applications {

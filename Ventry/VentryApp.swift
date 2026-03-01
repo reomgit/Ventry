@@ -14,16 +14,12 @@ struct VentryApp: App {
     
     var body: some Scene {
         WindowGroup {
-            Group {
-                if appState.hasAccess {
-                    ContentView()
-                } else {
-                    WelcomeView()
-                }
-            }
-            .environmentObject(appState)
+            ContentView()
+                .environmentObject(appState)
             .frame(minWidth: 800, minHeight: 600)
             .onAppear {
+                _ = AppStorageManager.shared.prepareDirectories()
+                _ = AppStorageManager.shared.prepareDesignAssetsDirectory()
                 PermissionManager.shared.refreshPermissionState()
             }
             .onChange(of: scenePhase) { _, newPhase in
