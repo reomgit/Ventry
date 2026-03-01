@@ -4,8 +4,11 @@ import AppKit
 struct WelcomeView: View {
     @ObservedObject var permissionManager = PermissionManager.shared
     @State private var isAnimating = false
-    @State private var setupStep = 1  // 1 = Applications, 2 = Documents
     @State private var isSettingUp = false
+
+    private var setupStep: PermissionManager.PermissionStep {
+        permissionManager.nextRequiredPermissionStep
+    }
 
     var body: some View {
         VStack(spacing: 30) {
@@ -23,14 +26,20 @@ struct WelcomeView: View {
                 Text("Welcome to Ventry")
                     .font(.system(size: 32, weight: .bold))
 
-                if setupStep == 1 {
+                if setupStep == .applications {
                     Text("To manage your applications and assets, Ventry needs access to your Applications folder.")
                         .font(.title3)
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: 400)
-                } else {
+                } else if setupStep == .documents {
                     Text("Ventry also needs access to your Documents folder to store collections and design assets.")
+                        .font(.title3)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: 400)
+                } else {
+                    Text("All required file access is available.")
                         .font(.title3)
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.secondary)
@@ -56,8 +65,8 @@ struct WelcomeView: View {
                         ProgressView()
                             .controlSize(.small)
                     }
-                    Image(systemName: setupStep == 1 ? "lock.open.fill" : "folder.badge.plus")
-                    Text(setupStep == 1 ? "Grant Applications Access" : "Grant Documents Access")
+                    Image(systemName: setupStep == .applications ? "lock.open.fill" : "folder.badge.plus")
+                    Text(buttonTitle)
                         .fontWeight(.semibold)
                 }
                 .frame(minWidth: 200)
@@ -66,7 +75,7 @@ struct WelcomeView: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .padding(.top, 20)
-            .disabled(isSettingUp)
+            .disabled(isSettingUp || setupStep == .complete)
             
             Spacer()
             
@@ -83,17 +92,9 @@ struct WelcomeView: View {
     }
 
     private func performSetup() async {
-        if setupStep == 1 {
-            // Step 1: Request Applications access
-            let success = await permissionManager.requestApplicationsDirectoryAccess()
-            if success {
-                // Move to step 2
-                await MainActor.run {
-                    setupStep = 2
-                }
-            }
-        } else if setupStep == 2 {
-            // Step 2: Request Documents access and create Design Assets folder
+        if setupStep == .applications {
+            _ = await permissionManager.requestApplicationsDirectoryAccess()
+        } else if setupStep == .documents {
             if let documentsURL = await permissionManager.requestDocumentsAccess() {
                 // Create Ventry/Design Assets folder structure
                 let ventryURL = documentsURL.appendingPathComponent("Ventry")
@@ -112,6 +113,17 @@ struct WelcomeView: View {
                     print("❌ Failed to create Ventry directories: \(error)")
                 }
             }
+        }
+    }
+
+    private var buttonTitle: String {
+        switch setupStep {
+        case .applications:
+            return "Grant Applications Access"
+        case .documents:
+            return "Grant Documents Access"
+        case .complete:
+            return "All Access Granted"
         }
     }
 }

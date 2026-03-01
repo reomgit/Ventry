@@ -272,38 +272,42 @@ class AppState: ObservableObject {
 
     /// Validates all required paths for applications, collections, and regular folders
     func validateAllPaths() async {
-        var pathsToValidate: [String] = []
+        var pathsToValidate = Set<String>()
 
         // Add /Applications path
-        pathsToValidate.append("/Applications")
+        pathsToValidate.insert(PermissionManager.applicationsPath)
+
+        if let documentsPath = PermissionManager.shared.documentsURL?.path {
+            pathsToValidate.insert(documentsPath)
+        }
 
         // Add all application directory paths
         for application in applications {
             for directory in application.directories {
-                pathsToValidate.append(directory.path)
+                pathsToValidate.insert(directory.path)
             }
         }
 
         // Add regular folder default paths
         for folder in regularFolders {
-            pathsToValidate.append(folder.defaultPath)
+            pathsToValidate.insert(folder.defaultPath)
         }
 
         // Add starred item paths
         for starredItem in starredItems {
             if let path = starredItem.path {
-                pathsToValidate.append(path)
+                pathsToValidate.insert(path)
             }
         }
 
         // Add collection paths
         for collection in collections {
-            pathsToValidate.append(collection.path)
+            pathsToValidate.insert(collection.path)
         }
 
         // Validate all paths
         await MainActor.run {
-            PermissionManager.shared.validateRequiredPaths(pathsToValidate)
+            PermissionManager.shared.validateRequiredPaths(Array(pathsToValidate))
         }
     }
 

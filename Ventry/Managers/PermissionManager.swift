@@ -4,19 +4,38 @@ import Combine
 
 class PermissionManager: ObservableObject {
     static let shared = PermissionManager()
+    static let applicationsPath = "/Applications"
 
     @Published var hasDirectoryAccess = false
+    @Published var hasApplicationsAccess = false
+    @Published var hasDocumentsAccess = false
     @Published var invalidPaths: [String] = []
     @Published var needsPathRevalidation = false
 
-    private init() {
-        // Check if we already have access to /Applications
-        let applicationsPath = "/Applications"
-        if checkDirectoryAccess(for: applicationsPath) {
-            hasDirectoryAccess = true
-        }
+    private let bookmarksKey = "SecurityScopedBookmarks"
+    private let legacyBookmarkPrefix = "SecurityBookmark_"
+    private var activeSecurityScopedPaths = Set<String>()
+
+    var documentsURL: URL? {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
     }
-    
+
+    private init() {
+        refreshPermissionState()
+    }
+
+    var nextRequiredPermissionStep: PermissionStep {
+        if !hasApplicationsAccess {
+            return .applications
+        }
+
+        if !hasDocumentsAccess {
+            return .documents
+        }
+
+        return .complete
+    }
+
     func requestDirectoryAccess(for url: URL? = nil) async -> Bool {
         return await withCheckedContinuation { continuation in
             DispatchQueue.main.async {
@@ -37,11 +56,16 @@ class PermissionManager: ObservableObject {
                 
                 openPanel.begin { response in
                     if response == .OK {
-                        // Store security-scoped bookmark for future access
                         if let selectedURL = openPanel.url {
+                            if let requestedURL = url,
+                               !self.pathIsCovered(requestedURL.path, bySelectionAt: selectedURL.path) {
+                                continuation.resume(returning: false)
+                                return
+                            }
+
                             self.storeSecurityScopedBookmark(for: selectedURL)
-                            self.hasDirectoryAccess = true
-                            continuation.resume(returning: true)
+                            self.refreshPermissionState()
+                            continuation.resume(returning: self.validatePath(url?.path ?? selectedURL.path))
                         } else {
                             continuation.resume(returning: false)
                         }
@@ -54,7 +78,7 @@ class PermissionManager: ObservableObject {
     }
     
     func requestApplicationsDirectoryAccess() async -> Bool {
-        let applicationsURL = URL(fileURLWithPath: "/Applications")
+        let applicationsURL = URL(fileURLWithPath: Self.applicationsPath)
         return await requestDirectoryAccess(for: applicationsURL)
     }
 
@@ -75,9 +99,15 @@ class PermissionManager: ObservableObject {
 
                 openPanel.begin { response in
                     if response == .OK, let selectedURL = openPanel.url {
-                        // Store security-scoped bookmark for future access
+                        guard let expectedDocumentsURL = self.documentsURL,
+                              self.pathIsCovered(expectedDocumentsURL.path, bySelectionAt: selectedURL.path) else {
+                            continuation.resume(returning: nil)
+                            return
+                        }
+
                         self.storeSecurityScopedBookmark(for: selectedURL)
-                        continuation.resume(returning: selectedURL)
+                        self.refreshPermissionState()
+                        continuation.resume(returning: expectedDocumentsURL)
                     } else {
                         continuation.resume(returning: nil)
                     }
@@ -89,53 +119,64 @@ class PermissionManager: ObservableObject {
     func storeSecurityScopedBookmark(for url: URL) {
         do {
             let bookmarkData = try url.bookmarkData(
-                options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess],
+                options: [.withSecurityScope],
                 includingResourceValuesForKeys: nil,
                 relativeTo: nil
             )
 
-            let key = "SecurityBookmark_\(url.path.replacingOccurrences(of: "/", with: "_"))"
-            UserDefaults.standard.set(bookmarkData, forKey: key)
+            var bookmarks = storedBookmarks()
+            bookmarks[normalizedPath(for: url)] = bookmarkData
+            UserDefaults.standard.set(bookmarks, forKey: bookmarksKey)
 
             print("Stored security bookmark for: \(url.path)")
         } catch {
             print("Failed to create security bookmark: \(error)")
         }
     }
-    
+
     func restoreSecurityScopedAccess(for url: URL) -> Bool {
-        let key = "SecurityBookmark_\(url.path.replacingOccurrences(of: "/", with: "_"))"
-        
-        guard let bookmarkData = UserDefaults.standard.data(forKey: key) else {
-            return false
-        }
-        
-        do {
-            var isStale = false
-            let restoredURL = try URL(
-                resolvingBookmarkData: bookmarkData,
-                options: [.withSecurityScope, .withoutUI],
-                relativeTo: nil,
-                bookmarkDataIsStale: &isStale
-            )
-            
-            if isStale {
-                // Bookmark is stale, need to request access again
-                return false
+        let targetPath = normalizedPath(for: url)
+
+        for candidatePath in bookmarkCandidatePaths(for: targetPath) {
+            guard let bookmarkData = bookmarkData(for: candidatePath) else {
+                continue
             }
-            
-            // Start accessing the security-scoped resource
-            _ = restoredURL.startAccessingSecurityScopedResource()
-            return true
-        } catch {
-            print("Failed to restore security bookmark: \(error)")
-            return false
+
+            do {
+                var isStale = false
+                let restoredURL = try URL(
+                    resolvingBookmarkData: bookmarkData,
+                    options: [.withSecurityScope, .withoutUI],
+                    relativeTo: nil,
+                    bookmarkDataIsStale: &isStale
+                )
+
+                if isStale {
+                    removeBookmark(for: candidatePath)
+                    continue
+                }
+
+                let restoredPath = normalizedPath(for: restoredURL)
+                if activeSecurityScopedPaths.contains(restoredPath) {
+                    return true
+                }
+
+                if restoredURL.startAccessingSecurityScopedResource() {
+                    activeSecurityScopedPaths.insert(restoredPath)
+                    return true
+                }
+            } catch {
+                print("Failed to restore security bookmark: \(error)")
+                removeBookmark(for: candidatePath)
+            }
         }
+
+        return false
     }
-    
+
     func checkDirectoryAccess(for path: String) -> Bool {
         let url = URL(fileURLWithPath: path)
-        
+
         // Try to restore existing access first
         if restoreSecurityScopedAccess(for: url) {
             return true
@@ -144,8 +185,10 @@ class PermissionManager: ObservableObject {
         // Check if we can read the directory
         return FileManager.default.isReadableFile(atPath: path)
     }
-    
+
     func stopAccessingSecurityScopedResource(for url: URL) {
+        let path = normalizedPath(for: url)
+        guard activeSecurityScopedPaths.remove(path) != nil else { return }
         url.stopAccessingSecurityScopedResource()
     }
 
@@ -210,7 +253,16 @@ class PermissionManager: ObservableObject {
     /// Requests access to a specific path that was found to be inaccessible
     func requestAccessToPath(_ path: String) async -> Bool {
         let url = URL(fileURLWithPath: path)
-        return await requestDirectoryAccess(for: url.deletingLastPathComponent())
+
+        var isDirectory: ObjCBool = false
+        let requestedURL: URL
+        if FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue {
+            requestedURL = url
+        } else {
+            requestedURL = url.deletingLastPathComponent()
+        }
+
+        return await requestDirectoryAccess(for: requestedURL)
     }
 
     /// Validates all required paths and updates published state
@@ -221,5 +273,89 @@ class PermissionManager: ObservableObject {
             self?.invalidPaths = invalid
             self?.needsPathRevalidation = !invalid.isEmpty
         }
+    }
+
+    func refreshPermissionState() {
+        let applicationsAccess = hasSecurityScopedAccess(for: Self.applicationsPath)
+        let documentsAccess = documentsURL.map { hasSecurityScopedAccess(for: $0.path) } ?? false
+
+        DispatchQueue.main.async { [weak self] in
+            self?.hasApplicationsAccess = applicationsAccess
+            self?.hasDocumentsAccess = documentsAccess
+            self?.hasDirectoryAccess = applicationsAccess && documentsAccess
+        }
+    }
+
+    private func bookmarkCandidatePaths(for path: String) -> [String] {
+        let standardizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
+        var candidates: [String] = []
+        var currentURL = URL(fileURLWithPath: standardizedPath)
+
+        while true {
+            let currentPath = currentURL.path
+            candidates.append(currentPath)
+
+            let parentURL = currentURL.deletingLastPathComponent()
+            if parentURL.path == currentPath {
+                break
+            }
+
+            currentURL = parentURL
+        }
+
+        return candidates
+    }
+
+    private func bookmarkData(for path: String) -> Data? {
+        if let bookmark = storedBookmarks()[path] {
+            return bookmark
+        }
+
+        return UserDefaults.standard.data(forKey: legacyKey(for: path))
+    }
+
+    private func removeBookmark(for path: String) {
+        var bookmarks = storedBookmarks()
+        bookmarks.removeValue(forKey: path)
+        UserDefaults.standard.set(bookmarks, forKey: bookmarksKey)
+        UserDefaults.standard.removeObject(forKey: legacyKey(for: path))
+        activeSecurityScopedPaths.remove(path)
+        refreshPermissionState()
+    }
+
+    private func storedBookmarks() -> [String: Data] {
+        UserDefaults.standard.dictionary(forKey: bookmarksKey) as? [String: Data] ?? [:]
+    }
+
+    private func legacyKey(for path: String) -> String {
+        "\(legacyBookmarkPrefix)\(path.replacingOccurrences(of: "/", with: "_"))"
+    }
+
+    private func normalizedPath(for url: URL) -> String {
+        url.standardizedFileURL.path
+    }
+
+    private func hasSecurityScopedAccess(for path: String) -> Bool {
+        restoreSecurityScopedAccess(for: URL(fileURLWithPath: path))
+    }
+
+    private func pathIsCovered(_ targetPath: String, bySelectionAt selectedPath: String) -> Bool {
+        let normalizedTarget = URL(fileURLWithPath: targetPath).standardizedFileURL.path
+        let normalizedSelection = URL(fileURLWithPath: selectedPath).standardizedFileURL.path
+
+        if normalizedSelection == "/" {
+            return true
+        }
+
+        return normalizedTarget == normalizedSelection ||
+            normalizedTarget.hasPrefix(normalizedSelection + "/")
+    }
+}
+
+extension PermissionManager {
+    enum PermissionStep {
+        case applications
+        case documents
+        case complete
     }
 }
