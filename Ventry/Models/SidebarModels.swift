@@ -159,15 +159,12 @@ enum TagColor: String, CaseIterable, Codable {
 
 // MARK: - Regular Folders
 enum RegularFolder: String, CaseIterable {
-    case documents = "Documents"
     case fonts = "Fonts"
     case designAssets = "Design Assets"
     case downloads = "Downloads"
 
     var systemImage: String {
         switch self {
-        case .documents:
-            return "doc.text"
         case .fonts:
             return "textformat"
         case .designAssets:
@@ -181,8 +178,6 @@ enum RegularFolder: String, CaseIterable {
         let homePath = resolvedHomePath
         let resolvedPath: String
         switch self {
-        case .documents:
-            resolvedPath = AppStorageManager.shared.documentsDirectory.path
         case .fonts:
             resolvedPath = "\(homePath)/Library/Fonts"
         case .designAssets:
@@ -201,7 +196,7 @@ enum RegularFolder: String, CaseIterable {
                 return AppStorageManager.shared.designAssetsDirectory.path
             }
             return AppStorageManager.shared.documentsDirectory.path
-        default:
+        case .fonts, .downloads:
             return defaultPath
         }
     }

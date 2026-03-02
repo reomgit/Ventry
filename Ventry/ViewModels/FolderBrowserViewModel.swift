@@ -399,6 +399,22 @@ class FolderBrowserViewModel: ObservableObject {
         }
     }
 
+    func requestPermissionAndRefresh() {
+        guard let pendingPath = pendingPermissionPath ?? currentDirectory?.path else {
+            refresh()
+            return
+        }
+
+        Task {
+            let granted = await permissionManager.requestAccessToPath(pendingPath)
+            if granted {
+                await MainActor.run {
+                    self.refresh()
+                }
+            }
+        }
+    }
+
     // MARK: - Breadcrumb Management
     var breadcrumbs: [String] {
         guard let current = currentDirectory else { return [] }

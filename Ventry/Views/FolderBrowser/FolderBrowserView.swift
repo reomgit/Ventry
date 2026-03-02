@@ -46,7 +46,11 @@ struct FolderBrowserView: View {
                             .multilineTextAlignment(.center)
 
                         Button("Retry") {
-                            viewModel.refresh()
+                            if viewModel.requiresPermission {
+                                viewModel.requestPermissionAndRefresh()
+                            } else {
+                                viewModel.refresh()
+                            }
                         }
                         .buttonStyle(.borderedProminent)
                     }
