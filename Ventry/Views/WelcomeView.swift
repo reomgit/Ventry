@@ -60,7 +60,7 @@ struct WelcomeView: View {
             
             Spacer()
             
-            Text("Ventry respects your privacy and only accesses the folders you select.")
+            Text("Ventry respects your privacy and asks macOS for folder access only when it is needed.")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .padding(.bottom, 30)

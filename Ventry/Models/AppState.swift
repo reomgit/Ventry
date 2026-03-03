@@ -27,7 +27,6 @@ class AppState: ObservableObject {
     init() {
         setupBindings()
         _ = AppStorageManager.shared.prepareDirectories()
-        _ = AppStorageManager.shared.prepareDesignAssetsDirectory()
 
         hasAccess = true
 

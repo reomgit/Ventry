@@ -90,8 +90,8 @@ struct PathValidationView: View {
     }
 
     private func requestAccessToPath(_ path: String) async {
-        let success = await permissionManager.requestAccessToPath(path)
-        if success {
+        let result = await permissionManager.requestAccessToPath(path)
+        if result == .granted {
             await appState.revalidatePaths()
         }
     }

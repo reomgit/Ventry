@@ -46,7 +46,6 @@ final class AppStorageManager {
             )
             return true
         } catch {
-            print("Failed to prepare design assets directory: \(error)")
             return false
         }
     }

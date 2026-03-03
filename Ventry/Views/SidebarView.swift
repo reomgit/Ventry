@@ -32,9 +32,6 @@ struct SidebarView: View {
                     ForEach(appState.regularFolders, id: \.self) { folder in
                         NavigationLink(
                             destination: FileBrowserView(title: folder.rawValue, path: folder.navigationPath)
-                                .onAppear {
-                                    folder.ensureDirectoryExists()
-                                }
                         ) {
                             RegularFolderRowView(folder: folder)
                         }

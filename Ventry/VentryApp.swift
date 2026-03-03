@@ -19,7 +19,6 @@ struct VentryApp: App {
             .frame(minWidth: 800, minHeight: 600)
             .onAppear {
                 _ = AppStorageManager.shared.prepareDirectories()
-                _ = AppStorageManager.shared.prepareDesignAssetsDirectory()
                 PermissionManager.shared.refreshPermissionState()
             }
             .onChange(of: scenePhase) { _, newPhase in

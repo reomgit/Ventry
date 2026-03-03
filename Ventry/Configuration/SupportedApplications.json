@@ -1,6 +1,6 @@
 {
   "supportedApplications": {
-    "com.adobe.AfterEffects": {
+    "com.adobe.AfterEffects.application": {
       "displayName": "Adobe After Effects",
       "appPaths": [
         "/Applications/Adobe After Effects 2025/Adobe After Effects 2025.app/",

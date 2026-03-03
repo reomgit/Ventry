@@ -190,22 +190,14 @@ enum RegularFolder: String, CaseIterable {
     }
 
     var navigationPath: String {
-        switch self {
-        case .designAssets:
-            if AppStorageManager.shared.prepareDesignAssetsDirectory() {
-                return AppStorageManager.shared.designAssetsDirectory.path
-            }
-            return AppStorageManager.shared.documentsDirectory.path
-        case .fonts, .downloads:
-            return defaultPath
-        }
+        defaultPath
     }
 
     /// Ensures the directory exists, creating it if necessary
     func ensureDirectoryExists() {
         switch self {
         case .designAssets:
-            _ = AppStorageManager.shared.prepareDesignAssetsDirectory()
+            break
         default:
             let path = defaultPath
             if !FileManager.default.fileExists(atPath: path) {

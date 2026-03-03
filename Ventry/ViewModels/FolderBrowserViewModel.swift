@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import AppKit
 
 @MainActor
 class FolderBrowserViewModel: ObservableObject {
@@ -9,6 +10,7 @@ class FolderBrowserViewModel: ObservableObject {
     @Published var selectedItems: Set<FolderBrowserItem> = []
     @Published var errorMessage: String?
     @Published var requiresPermission = false
+    @Published var isBlockedByDocumentsPrivacy = false
     @Published var pendingPermissionPath: String?
     @Published var isLoading = false
     @Published var sortOrder: SortOrder = .nameAscending
@@ -107,6 +109,7 @@ class FolderBrowserViewModel: ObservableObject {
             isLoading = true
             errorMessage = nil
             requiresPermission = false
+            isBlockedByDocumentsPrivacy = false
             pendingPermissionPath = nil
 
             // Small delay to debounce rapid navigation
@@ -124,6 +127,19 @@ class FolderBrowserViewModel: ObservableObject {
     }
 
     private func performLoad(at url: URL) async {
+        if permissionManager.isSystemManagedDocumentsPath(url.path) {
+            let accessResult = await permissionManager.requestAccessToPath(url.path)
+
+            guard accessResult == .granted else {
+                if accessResult == .blockedByDocumentsPrivacy {
+                    handleDocumentsPrivacyBlocked(for: url)
+                } else {
+                    handlePermissionDenied(for: url)
+                }
+                return
+            }
+        }
+
         var isDirectory: ObjCBool = false
 
         guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory),
@@ -134,7 +150,11 @@ class FolderBrowserViewModel: ObservableObject {
         }
 
         guard permissionManager.validatePath(url.path) else {
-            handlePermissionDenied(for: url)
+            if permissionManager.isSystemManagedDocumentsPath(url.path) {
+                handleDocumentsPrivacyBlocked(for: url)
+            } else {
+                handlePermissionDenied(for: url)
+            }
             return
         }
 
@@ -175,7 +195,11 @@ class FolderBrowserViewModel: ObservableObject {
         } catch {
             let nsError = error as NSError
             if nsError.domain == NSCocoaErrorDomain && nsError.code == NSFileReadNoPermissionError {
-                handlePermissionDenied(for: url)
+                if permissionManager.isSystemManagedDocumentsPath(url.path) {
+                    handleDocumentsPrivacyBlocked(for: url)
+                } else {
+                    handlePermissionDenied(for: url)
+                }
             } else {
                 errorMessage = "Unable to read contents: \(error.localizedDescription)"
                 items = []
@@ -185,8 +209,17 @@ class FolderBrowserViewModel: ObservableObject {
 
     private func handlePermissionDenied(for url: URL) {
         requiresPermission = true
+        isBlockedByDocumentsPrivacy = false
         pendingPermissionPath = url.path
         errorMessage = "Permission is required to access this folder."
+        items = []
+    }
+
+    private func handleDocumentsPrivacyBlocked(for url: URL) {
+        requiresPermission = true
+        isBlockedByDocumentsPrivacy = true
+        pendingPermissionPath = url.path
+        errorMessage = "Ventry can't access Documents."
         items = []
     }
 
@@ -406,13 +439,23 @@ class FolderBrowserViewModel: ObservableObject {
         }
 
         Task {
-            let granted = await permissionManager.requestAccessToPath(pendingPath)
-            if granted {
-                await MainActor.run {
+            let result = await permissionManager.requestAccessToPath(pendingPath)
+
+            await MainActor.run {
+                switch result {
+                case .granted:
                     self.refresh()
+                case .blockedByDocumentsPrivacy:
+                    self.handleDocumentsPrivacyBlocked(for: URL(fileURLWithPath: pendingPath))
+                case .denied:
+                    self.handlePermissionDenied(for: URL(fileURLWithPath: pendingPath))
                 }
             }
         }
+    }
+
+    func openPrivacySettings() {
+        permissionManager.openDocumentsPrivacySettings()
     }
 
     // MARK: - Breadcrumb Management

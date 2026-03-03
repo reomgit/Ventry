@@ -35,6 +35,37 @@ struct FolderBrowserView: View {
                 if viewModel.isLoading {
                     ProgressView()
                         .progressViewStyle(.circular)
+                } else if viewModel.isBlockedByDocumentsPrivacy {
+                    VStack(spacing: 14) {
+                        Image(systemName: "hand.raised.fill")
+                            .font(.system(size: 48))
+                            .foregroundColor(.secondary)
+
+                        Text("Ventry Can't Access Documents")
+                            .font(.headline)
+
+                        Text("macOS is blocking access to Documents. Ventry needs this to create and manage Documents/Ventry/Design Assets.")
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+
+                        Text("Enable Ventry in System Settings > Privacy & Security > Files & Folders. If Documents access still does not appear there, Full Disk Access is the fallback.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+
+                        HStack(spacing: 12) {
+                            Button("Try Again") {
+                                viewModel.requestPermissionAndRefresh()
+                            }
+                            .buttonStyle(.borderedProminent)
+
+                            Button("Open Privacy Settings") {
+                                viewModel.openPrivacySettings()
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                    .padding()
                 } else if let errorMessage = viewModel.errorMessage {
                     VStack(spacing: 12) {
                         Image(systemName: "exclamationmark.triangle")
