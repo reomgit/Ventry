@@ -113,11 +113,11 @@ private struct ListItemView: View {
     var body: some View {
         HStack(spacing: 12) {
             // Icon
-            Image(systemName: item.iconName)
-                .font(.system(size: 18))
-                .foregroundColor(item.iconColor)
-                .symbolRenderingMode(.hierarchical)
-                .frame(width: 24, height: 24)
+            FolderBrowserItemIconView(
+                item: item,
+                size: 18
+            )
+            .frame(width: 24, height: 24)
 
             // Name
             Text(item.displayName)

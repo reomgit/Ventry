@@ -132,10 +132,11 @@ private struct GridItemView: View {
                     )
                     .frame(width: iconFrame, height: iconFrame)
 
-                Image(systemName: item.iconName)
-                    .font(.system(size: iconSize))
-                    .foregroundColor(item.iconColor)
-                    .symbolRenderingMode(.hierarchical)
+                FolderBrowserItemIconView(
+                    item: item,
+                    size: iconSize,
+                    showCreativeBadge: true
+                )
             }
             .overlay(
                 RoundedRectangle(cornerRadius: 8)

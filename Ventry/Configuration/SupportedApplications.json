@@ -19,19 +19,19 @@
         },
         {
           "name": "Scripts",
-          "path": "/Applications/Adobe After Effects 2025/Scripts/",
+          "path": "/Applications/Adobe After Effects {year}/Scripts/",
           "type": "scripts",
           "icon": "terminal"
         },
         {
           "name": "User Presets",
-          "path": "/Documents/Adobe/After Effects 2025/User Presets/",
+          "path": "/Documents/Adobe/After Effects {year}/User Presets/",
           "type": "presets",
           "icon": "folder" 
         },
         {
           "name": "Workspace",
-          "path": "/Library/Preferences/Adobe/After Effects/25.0/Workspaces.xml/",
+          "path": "/Library/Preferences/Adobe/After Effects/{25.0/Workspaces.xml/",
           "type": "workspace",
           "icon": "rectangle.on.rectangle"
         }

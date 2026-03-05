@@ -65,12 +65,14 @@ Before testing, ensure:
 **Steps:**
 1. Ensure Grid view is selected
 2. Verify large icons with file names
-3. Check icon colors for different file types
+3. Verify icons match Finder for known files/apps/folders
+4. Verify creative file badges appear for types like PSD/AI/AEP in Grid view
 
 **Expected Result:**
 - Icons are 40pt size
 - File names appear below icons
-- Colors match file type (purple for PSD, blue for videos, etc.)
+- Icons match native macOS/Finder icon style
+- Creative badges are subtle and render only in Grid view
 - Grid adapts to window size
 
 #### Test 2.2: List View
@@ -78,23 +80,27 @@ Before testing, ensure:
 1. Switch to List view
 2. Verify columns: Name, Size, Modification Date
 3. Check alternating row backgrounds
+4. Verify no creative badges are rendered in List view
 
 **Expected Result:**
 - Three columns visible
 - File sizes formatted (KB, MB, GB)
 - Dates formatted as "Month DD, YYYY at HH:MM"
 - Rows alternate background color
+- Finder-native icons are shown without badges
 
 #### Test 2.3: Column View
 **Steps:**
 1. Switch to Column view
 2. Verify compact layout with metadata
 3. Check multi-column grid
+4. Verify no creative badges are rendered in Column view
 
 **Expected Result:**
 - 4 columns of items
 - Name + size/date metadata visible
 - Compact spacing
+- Finder-native icons are shown without badges
 
 #### Test 2.4: View Mode Persistence
 **Steps:**

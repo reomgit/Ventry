@@ -7,7 +7,10 @@ A comprehensive, native macOS folder browsing interface for Ventry that provides
 ### Core Components
 
 #### Models
-- **FolderBrowserItem.swift**: Rich file/folder metadata model with UTType detection, custom icons for creative file types (.psd, .ai, .aep, etc.), and formatted display strings
+- **FolderBrowserItem.swift**: Rich file/folder metadata model with UTType detection and formatted display strings
+
+#### Managers
+- **FolderBrowserIconProvider.swift**: Native Finder icon loading via NSWorkspace with in-memory caching and creative badge metadata mapping
 
 #### ViewModels
 - **FolderBrowserViewModel.swift**: Centralized state management with:
@@ -22,6 +25,7 @@ A comprehensive, native macOS folder browsing interface for Ventry that provides
 - **FolderBrowserGridView.swift**: Grid layout with large icons (inspired by Finder icon view)
 - **FolderBrowserListView.swift**: Detailed list with file size, dates, and columns
 - **FolderBrowserColumnView.swift**: Compact multi-column layout
+- **FolderBrowserItemIconView.swift**: Shared icon renderer for native file icons and grid-only creative badges
 - **FolderBrowserToolbar.swift**: Navigation controls, breadcrumbs, view mode switcher, and sort menu
 - **QuickLookPreview.swift**: Native Quick Look integration using QLPreviewPanel
 
@@ -34,9 +38,9 @@ A comprehensive, native macOS folder browsing interface for Ventry that provides
 - **History stack**: Maintains browsing history with forward/back support
 
 ### View Modes
-- **Grid View**: Large icons with file names (default)
-- **List View**: Detailed table with size, modification date, alternating row backgrounds
-- **Column View**: Compact multi-column layout with metadata
+- **Grid View**: Large Finder-native icons with file names and subtle creative badges
+- **List View**: Detailed table with Finder-native icons, file size, dates, and alternating row backgrounds
+- **Column View**: Compact multi-column layout with Finder-native icons and metadata
 - Persistent view mode preference using @AppStorage
 
 ### File Operations
@@ -73,6 +77,7 @@ Right-click any item to access:
 - Lazy loading with LazyVGrid/LazyVStack
 - 100ms debounce on directory navigation
 - Efficient UTType-based file detection
+- NSWorkspace icon caching by path + size
 - Cancellable async tasks
 
 ### UI/UX
@@ -81,7 +86,8 @@ Right-click any item to access:
 - Smooth animations and transitions
 - Loading states and error messages
 - Empty state handling
-- Icon colors for different file types
+- Finder-native file and folder icons
+- Subtle creative file badges in Grid view
 
 ## Integration
 
@@ -163,7 +169,7 @@ Potential improvements for future versions:
 - Thumbnail generation for images/videos
 - Drag-and-drop support for moving files
 - Multi-selection with shift-click
-- Custom file type icons using NSWorkspace
+- Per-file thumbnail previews in icon mode
 - File size filtering
 - Search within directory
 - Tag support

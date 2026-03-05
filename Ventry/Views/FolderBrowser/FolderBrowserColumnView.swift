@@ -113,11 +113,11 @@ private struct ColumnItemView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: item.iconName)
-                .font(.system(size: compact ? 14 : 16))
-                .foregroundColor(item.iconColor)
-                .symbolRenderingMode(.hierarchical)
-                .frame(width: compact ? 18 : 20, height: compact ? 18 : 20)
+            FolderBrowserItemIconView(
+                item: item,
+                size: compact ? 14 : 16
+            )
+            .frame(width: compact ? 18 : 20, height: compact ? 18 : 20)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.displayName)
