@@ -5,6 +5,7 @@ struct FolderBrowserView: View {
     let title: String
     let path: String
 
+    @Environment(\.undoManager) private var undoManager
     @StateObject private var viewModel = FolderBrowserViewModel()
     @AppStorage("folderBrowserViewMode") private var viewMode: BrowserViewMode = .grid
     @State private var sortOrder: SortOrder = .nameAscending
@@ -18,6 +19,10 @@ struct FolderBrowserView: View {
     @State private var gridColumnCount = 1
     @State private var columnViewColumnCount = 1
     @State private var keyboardMonitor: Any?
+
+    private var undoManagerIdentity: ObjectIdentifier? {
+        undoManager.map(ObjectIdentifier.init)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -104,6 +109,7 @@ struct FolderBrowserView: View {
         .navigationTitle(title)
         .onAppear {
             startKeyboardMonitor()
+            viewModel.bindUndoManager(undoManager)
             if viewModel.currentDirectory == nil {
                 let url = URL(fileURLWithPath: path)
                 viewModel.navigateTo(url: url)
@@ -116,6 +122,17 @@ struct FolderBrowserView: View {
             let url = URL(fileURLWithPath: newPath)
             viewModel.navigateTo(url: url)
         }
+        .onChange(of: undoManagerIdentity) { _, _ in
+            viewModel.bindUndoManager(undoManager)
+        }
+        .onChange(of: viewModel.operationErrorMessage) { _, message in
+            guard let message else { return }
+            errorAlert = ErrorAlert(
+                title: "Operation Failed",
+                message: message
+            )
+            viewModel.clearOperationErrorMessage()
+        }
         .alert("Delete Items", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) {
                 itemsToDelete = []
@@ -124,7 +141,7 @@ struct FolderBrowserView: View {
                 deleteSelectedItems()
             }
         } message: {
-            Text("Are you sure you want to delete \(itemsToDelete.count) item(s)? This action cannot be undone.")
+            Text("Are you sure you want to delete \(itemsToDelete.count) item(s)? You can undo this action.")
         }
         .alert("Rename Item", isPresented: $showingRenameAlert) {
             TextField("New Name", text: $renameText)
@@ -225,18 +242,22 @@ struct FolderBrowserView: View {
             }
         )
         .onKeyPress(.upArrow) {
+            guard viewModel.selectedItems.isEmpty else { return .ignored }
             handleArrowNavigation(.up)
             return .handled
         }
         .onKeyPress(.leftArrow) {
+            guard viewModel.selectedItems.isEmpty else { return .ignored }
             handleArrowNavigation(.left)
             return .handled
         }
         .onKeyPress(.downArrow) {
+            guard viewModel.selectedItems.isEmpty else { return .ignored }
             handleArrowNavigation(.down)
             return .handled
         }
         .onKeyPress(.rightArrow) {
+            guard viewModel.selectedItems.isEmpty else { return .ignored }
             handleArrowNavigation(.right)
             return .handled
         }
@@ -442,11 +463,10 @@ struct FolderBrowserView: View {
     private func shouldHandleArrowEvent(_ event: NSEvent) -> Bool {
         guard !viewModel.selectedItems.isEmpty else { return false }
 
-        // Let Quick Look keep native multi-item left/right cycling behavior.
+        // Let Quick Look keep native arrow key behavior while it is visible.
         if QLPreviewPanel.sharedPreviewPanelExists(),
            let panel = QLPreviewPanel.shared(),
-           panel.isVisible,
-           viewModel.selectedItems.count > 1 {
+           panel.isVisible {
             return false
         }
 
@@ -569,36 +589,14 @@ struct FolderBrowserView: View {
     }
 
     private func duplicateItems(_ items: [FolderBrowserItem]) {
-        let fileManager = FileManager.default
-
         Task {
-            for item in items {
-                do {
-                    let parentURL = item.url.deletingLastPathComponent()
-                    let baseName = item.url.deletingPathExtension().lastPathComponent
-                    let ext = item.url.pathExtension
-                    var counter = 1
-                    var newURL: URL
-
-                    repeat {
-                        let newName = ext.isEmpty ? "\(baseName) copy \(counter)" : "\(baseName) copy \(counter).\(ext)"
-                        newURL = parentURL.appendingPathComponent(newName)
-                        counter += 1
-                    } while fileManager.fileExists(atPath: newURL.path)
-
-                    try fileManager.copyItem(at: item.url, to: newURL)
-                } catch {
-                    await MainActor.run {
-                        errorAlert = ErrorAlert(
-                            title: "Duplicate Failed",
-                            message: "Could not duplicate '\(item.displayName)': \(error.localizedDescription)"
-                        )
-                    }
-                }
-            }
-
-            await MainActor.run {
-                viewModel.refresh()
+            do {
+                try await viewModel.duplicateItems(items)
+            } catch {
+                errorAlert = ErrorAlert(
+                    title: "Duplicate Failed",
+                    message: "Could not duplicate selected item(s): \(error.localizedDescription)"
+                )
             }
         }
     }

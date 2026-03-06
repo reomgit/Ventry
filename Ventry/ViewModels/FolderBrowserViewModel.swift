@@ -9,6 +9,7 @@ class FolderBrowserViewModel: ObservableObject {
     @Published var items: [FolderBrowserItem] = []
     @Published var selectedItems: Set<FolderBrowserItem> = []
     @Published var errorMessage: String?
+    @Published var operationErrorMessage: String?
     @Published var requiresPermission = false
     @Published var isBlockedByDocumentsPrivacy = false
     @Published var pendingPermissionPath: String?
@@ -40,9 +41,20 @@ class FolderBrowserViewModel: ObservableObject {
     private var loadTask: Task<Void, Never>?
     private let fileManager = FileManager.default
     private let permissionManager = PermissionManager.shared
+    private weak var undoManager: UndoManager?
 
     // MARK: - Initialization
     init() {}
+
+    // MARK: - Undo Manager
+    func bindUndoManager(_ undoManager: UndoManager?) {
+        self.undoManager = undoManager
+        self.undoManager?.levelsOfUndo = 50
+    }
+
+    func clearOperationErrorMessage() {
+        operationErrorMessage = nil
+    }
 
     // MARK: - Navigation Methods
     func navigateTo(url: URL, addToHistory: Bool = true) {
@@ -367,20 +379,50 @@ class FolderBrowserViewModel: ObservableObject {
     }
 
     func deleteItems(_ items: [FolderBrowserItem]) async throws {
+        let validItems = items.map { $0.url.standardizedFileURL }
+        guard !validItems.isEmpty else { return }
+
+        let steps = validItems.map { FolderBrowserTrashStep(originalURL: $0) }
+        let transaction = FolderBrowserMutationTransaction(
+            actionName: "Move to Trash",
+            steps: steps
+        )
+
+        try await performForwardTransaction(transaction, clearSelection: true)
+    }
+
+    func duplicateItems(_ items: [FolderBrowserItem]) async throws {
+        guard !items.isEmpty else { return }
+
+        var reservedPaths = Set<String>()
+        var steps: [FolderBrowserMutationStep] = []
+        steps.reserveCapacity(items.count)
+
         for item in items {
-            try fileManager.trashItem(at: item.url, resultingItemURL: nil)
+            let sourceURL = item.url.standardizedFileURL
+            let parentURL = sourceURL.deletingLastPathComponent().standardizedFileURL
+            let destinationURL = uniqueDestinationURL(
+                for: sourceURL,
+                in: parentURL,
+                reservedPaths: reservedPaths
+            )
+            reservedPaths.insert(destinationURL.path)
+            steps.append(FolderBrowserCopyStep(sourceURL: sourceURL, destinationURL: destinationURL))
         }
 
-        // Refresh the current directory
-        if let current = currentDirectory {
-            await performLoad(at: current)
-        }
-
-        selectedItems.removeAll()
+        let transaction = FolderBrowserMutationTransaction(
+            actionName: "Duplicate",
+            steps: steps
+        )
+        try await performForwardTransaction(transaction, clearSelection: false)
     }
 
     func renameItem(_ item: FolderBrowserItem, to newName: String) async throws {
-        let newURL = item.url.deletingLastPathComponent().appendingPathComponent(newName)
+        let sourceURL = item.url.standardizedFileURL
+        let newURL = sourceURL
+            .deletingLastPathComponent()
+            .appendingPathComponent(newName)
+            .standardizedFileURL
 
         guard !fileManager.fileExists(atPath: newURL.path) else {
             throw NSError(domain: "FolderBrowser", code: 1, userInfo: [
@@ -388,12 +430,11 @@ class FolderBrowserViewModel: ObservableObject {
             ])
         }
 
-        try fileManager.moveItem(at: item.url, to: newURL)
-
-        // Refresh the current directory
-        if let current = currentDirectory {
-            await performLoad(at: current)
-        }
+        let transaction = FolderBrowserMutationTransaction(
+            actionName: "Rename",
+            steps: [FolderBrowserMoveStep(sourceURL: sourceURL, destinationURL: newURL)]
+        )
+        try await performForwardTransaction(transaction, clearSelection: false)
     }
 
     func importDroppedItems(
@@ -411,18 +452,88 @@ class FolderBrowserViewModel: ObservableObject {
             ])
         }
 
-        let uniqueURLs = Array(Set(droppedURLs.map { $0.standardizedFileURL }))
+        let uniqueURLs = deduplicatedURLsPreservingOrder(droppedURLs.map { $0.standardizedFileURL })
+        let destinationRoot = destinationDirectory.standardizedFileURL
+        var reservedPaths = Set<String>()
+        var steps: [FolderBrowserMutationStep] = []
+        steps.reserveCapacity(uniqueURLs.count)
 
         for sourceURL in uniqueURLs {
-            try moveOrCopyDroppedItem(
+            if let step = try buildDropMutationStep(
                 sourceURL,
-                to: destinationDirectory.standardizedFileURL,
+                to: destinationRoot,
+                reservedPaths: &reservedPaths,
                 preferMove: preferMove
-            )
+            ) {
+                steps.append(step)
+            }
         }
 
+        guard !steps.isEmpty else { return }
+        let transaction = FolderBrowserMutationTransaction(
+            actionName: preferMove ? "Move" : "Copy",
+            steps: steps
+        )
+        try await performForwardTransaction(transaction, clearSelection: false)
+    }
+
+    private func performForwardTransaction(
+        _ transaction: FolderBrowserMutationTransaction,
+        clearSelection: Bool
+    ) async throws {
+        guard !transaction.isEmpty else { return }
+        try transaction.applyForward(fileManager: fileManager)
+        registerUndo(for: transaction)
+        await refreshAfterMutation(clearSelection: clearSelection)
+    }
+
+    private func executeUndo(_ transaction: FolderBrowserMutationTransaction) async {
+        do {
+            try transaction.applyUndo(fileManager: fileManager)
+            registerRedo(for: transaction)
+            await refreshAfterMutation(clearSelection: true)
+        } catch {
+            operationErrorMessage = "Undo failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func executeRedo(_ transaction: FolderBrowserMutationTransaction) async {
+        do {
+            try transaction.applyRedo(fileManager: fileManager)
+            registerUndo(for: transaction)
+            await refreshAfterMutation(clearSelection: true)
+        } catch {
+            operationErrorMessage = "Redo failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func registerUndo(for transaction: FolderBrowserMutationTransaction) {
+        guard let undoManager else { return }
+        undoManager.registerUndo(withTarget: self) { target in
+            Task { @MainActor in
+                await target.executeUndo(transaction)
+            }
+        }
+        undoManager.setActionName(transaction.actionName)
+    }
+
+    private func registerRedo(for transaction: FolderBrowserMutationTransaction) {
+        guard let undoManager else { return }
+        undoManager.registerUndo(withTarget: self) { target in
+            Task { @MainActor in
+                await target.executeRedo(transaction)
+            }
+        }
+        undoManager.setActionName(transaction.actionName)
+    }
+
+    private func refreshAfterMutation(clearSelection: Bool) async {
         if let current = currentDirectory {
             await performLoad(at: current)
+        }
+
+        if clearSelection {
+            selectedItems.removeAll()
         }
     }
 
@@ -464,26 +575,17 @@ class FolderBrowserViewModel: ObservableObject {
         return current.pathComponents.filter { $0 != "/" }
     }
 
-    private func moveOrCopyDroppedItem(
+    private func buildDropMutationStep(
         _ sourceURL: URL,
         to destinationDirectory: URL,
+        reservedPaths: inout Set<String>,
         preferMove: Bool
-    ) throws {
+    ) throws -> FolderBrowserMutationStep? {
         let source = sourceURL.standardizedFileURL
         let destinationRoot = destinationDirectory.standardizedFileURL
-        let sourceScoped = source.startAccessingSecurityScopedResource()
-        let destinationScoped = destinationRoot.startAccessingSecurityScopedResource()
-        defer {
-            if sourceScoped {
-                source.stopAccessingSecurityScopedResource()
-            }
-            if destinationScoped {
-                destinationRoot.stopAccessingSecurityScopedResource()
-            }
-        }
 
         // Reject dropping a folder into itself or one of its descendants.
-        if source.hasDirectoryPath,
+        if isDirectory(at: source),
            (source == destinationRoot || destinationRoot.path.hasPrefix(source.path + "/")) {
             throw NSError(domain: "FolderBrowser", code: 3, userInfo: [
                 NSLocalizedDescriptionKey: "Cannot place a folder inside itself."
@@ -495,36 +597,85 @@ class FolderBrowserViewModel: ObservableObject {
 
         // Same-directory move is a no-op.
         if preferMove && sameParent {
-            return
+            return nil
         }
 
-        let destinationURL = uniqueDestinationURL(for: source, in: destinationRoot)
+        let destinationURL = uniqueDestinationURL(
+            for: source,
+            in: destinationRoot,
+            reservedPaths: reservedPaths
+        )
+        reservedPaths.insert(destinationURL.path)
 
         if preferMove {
-            try fileManager.moveItem(at: source, to: destinationURL)
+            return FolderBrowserMoveStep(sourceURL: source, destinationURL: destinationURL)
         } else {
-            try fileManager.copyItem(at: source, to: destinationURL)
+            return FolderBrowserCopyStep(sourceURL: source, destinationURL: destinationURL)
         }
     }
 
-    private func uniqueDestinationURL(for sourceURL: URL, in destinationDirectory: URL) -> URL {
-        let preferred = destinationDirectory.appendingPathComponent(sourceURL.lastPathComponent)
-        guard fileManager.fileExists(atPath: preferred.path) else {
-            return preferred
-        }
+    private func deduplicatedURLsPreservingOrder(_ urls: [URL]) -> [URL] {
+        var seenPaths = Set<String>()
+        var results: [URL] = []
+        results.reserveCapacity(urls.count)
 
+        for url in urls {
+            let standardized = url.standardizedFileURL
+            if seenPaths.insert(standardized.path).inserted {
+                results.append(standardized)
+            }
+        }
+        return results
+    }
+
+    private func isDirectory(at url: URL) -> Bool {
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
+            return false
+        }
+        return isDirectory.boolValue
+    }
+
+    private func uniqueDestinationURL(
+        for sourceURL: URL,
+        in destinationDirectory: URL,
+        reservedPaths: Set<String> = []
+    ) -> URL {
+        let preferred = destinationDirectory
+            .appendingPathComponent(sourceURL.lastPathComponent)
+            .standardizedFileURL
+        guard !fileManager.fileExists(atPath: preferred.path),
+              !reservedPaths.contains(preferred.path) else {
+            return resolveUniqueDestination(
+                baseURL: preferred,
+                sourceURL: sourceURL,
+                destinationDirectory: destinationDirectory,
+                reservedPaths: reservedPaths
+            )
+        }
+        return preferred
+    }
+
+    private func resolveUniqueDestination(
+        baseURL: URL,
+        sourceURL: URL,
+        destinationDirectory: URL,
+        reservedPaths: Set<String>
+    ) -> URL {
         let ext = sourceURL.pathExtension
         let baseName = sourceURL.deletingPathExtension().lastPathComponent
         var counter = 1
-        var candidate = preferred
+        var candidate = baseURL
 
         repeat {
             let newName = ext.isEmpty
                 ? "\(baseName) \(counter)"
                 : "\(baseName) \(counter).\(ext)"
-            candidate = destinationDirectory.appendingPathComponent(newName)
+            candidate = destinationDirectory
+                .appendingPathComponent(newName)
+                .standardizedFileURL
             counter += 1
-        } while fileManager.fileExists(atPath: candidate.path)
+        } while fileManager.fileExists(atPath: candidate.path) || reservedPaths.contains(candidate.path)
 
         return candidate
     }

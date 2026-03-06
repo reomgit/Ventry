@@ -49,10 +49,16 @@ A comprehensive, native macOS folder browsing interface for Ventry that provides
 - **Delete**: Move items to Trash (with confirmation alert)
 - **Rename**: Rename single items with validation
 - **Duplicate**: Create copies with automatic naming (item copy 1, item copy 2, etc.)
+- **Undo / Redo**: Native Edit menu + Cmd+Z / Shift+Cmd+Z for move, copy, rename, duplicate, and trash actions triggered in Folder Browser
 - **Copy**: Copy file URLs to pasteboard
 - **Copy Path**: Copy file path as text
 - **Reveal in Finder**: Open Finder at file location
 - **Get Info**: Open Finder's Get Info window
+
+Undo/redo behavior details:
+- History is per Folder Browser session with a max depth of 50 actions
+- Batch operations (multi-delete, multi-duplicate, multi-drop) undo/redo as one grouped action
+- If a target path conflict exists during undo/redo, the action fails safely and shows an error (no overwrite)
 
 ### Context Menu
 Right-click any item to access:
@@ -70,6 +76,8 @@ Right-click any item to access:
 - **Space**: Quick Look preview
 - **Return/Enter**: Open selected item
 - **Delete/Backspace**: Move to Trash
+- **Cmd+Z**: Undo last file mutation
+- **Shift+Cmd+Z**: Redo last undone mutation
 - **Cmd+A**: Select all
 - **Cmd+Click**: Toggle selection
 

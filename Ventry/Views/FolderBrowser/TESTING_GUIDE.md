@@ -255,6 +255,52 @@ Before testing, ensure:
 - File is selected in Finder window
 - Finder window comes to front
 
+#### Test 5.7: Undo/Redo Rename
+**Steps:**
+1. Rename a file from `test.txt` to `test-renamed.txt`
+2. Press Cmd+Z
+3. Press Shift+Cmd+Z
+
+**Expected Result:**
+- Cmd+Z restores original name
+- Shift+Cmd+Z reapplies renamed state
+- Folder refresh remains stable and no duplicate files appear
+
+#### Test 5.8: Undo/Redo Batch Delete
+**Steps:**
+1. Select 3 files
+2. Delete them via Delete key and confirm
+3. Press Cmd+Z once
+4. Press Shift+Cmd+Z once
+
+**Expected Result:**
+- One undo restores all 3 files together
+- One redo moves all 3 files to Trash again
+- No partial restore/delete occurs
+
+#### Test 5.9: Undo/Redo Duplicate
+**Steps:**
+1. Duplicate a single file
+2. Confirm duplicate appears
+3. Press Cmd+Z
+4. Press Shift+Cmd+Z
+
+**Expected Result:**
+- Undo removes only the created duplicate
+- Redo restores that duplicate
+- Original source file is unchanged
+
+#### Test 5.10: Undo Conflict Safety
+**Steps:**
+1. Rename `example.txt` to `example-new.txt`
+2. Manually create a new `example.txt` in the same folder
+3. Press Cmd+Z
+
+**Expected Result:**
+- Undo fails with an error alert
+- Existing `example.txt` is not overwritten
+- `example-new.txt` remains in place
+
 ### 6. Sorting
 
 #### Test 6.1: Sort by Name
@@ -368,6 +414,17 @@ Menu contains:
 
 **Expected Result:**
 - All 10 files selected
+
+#### Test 8.4: Undo/Redo Shortcuts
+**Steps:**
+1. Perform a rename, duplicate, or delete
+2. Press Cmd+Z
+3. Press Shift+Cmd+Z
+
+**Expected Result:**
+- Undo executes for supported file mutation actions
+- Redo restores the undone action
+- No custom shortcut conflicts with existing navigation keys
 
 ### 9. Error Handling
 
@@ -523,6 +580,8 @@ After any changes, run this quick regression test:
 8. Right-click → Reveal in Finder ✓
 9. Delete 1 file (confirm) ✓
 10. Rename 1 file ✓
+11. Cmd+Z undo rename/delete ✓
+12. Shift+Cmd+Z redo rename/delete ✓
 
 All should work without errors.
 
