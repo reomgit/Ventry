@@ -9,8 +9,29 @@ struct DetectedApplication: Identifiable {
     let name: String
     let bundleIdentifier: String
     let bundlePath: String
+    let appVersion: String?
     var availableDirectories: [AvailableDirectory]
-    var isAlreadyAdded: Bool = false
+    var isAlreadyAdded: Bool
+
+    var installKey: String {
+        "\(bundleIdentifier)::\(bundlePath)"
+    }
+
+    init(
+        name: String,
+        bundleIdentifier: String,
+        bundlePath: String,
+        appVersion: String? = nil,
+        availableDirectories: [AvailableDirectory],
+        isAlreadyAdded: Bool = false
+    ) {
+        self.name = name
+        self.bundleIdentifier = bundleIdentifier
+        self.bundlePath = bundlePath
+        self.appVersion = appVersion
+        self.availableDirectories = availableDirectories
+        self.isAlreadyAdded = isAlreadyAdded
+    }
 }
 
 struct AvailableDirectory: Identifiable {

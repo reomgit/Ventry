@@ -2,14 +2,14 @@ import SwiftUI
 
 struct ApplicationDirectoryView: View {
     @EnvironmentObject var appState: AppState
-    let bundleIdentifier: String
+    let applicationId: UUID
     
     private let columns = [
         GridItem(.adaptive(minimum: 150, maximum: 200), spacing: 16)
     ]
 
     private var application: Application? {
-        appState.applications.first { $0.bundleIdentifier == bundleIdentifier }
+        appState.applications.first { $0.id == applicationId }
     }
     
     var body: some View {

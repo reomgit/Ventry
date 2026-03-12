@@ -102,7 +102,11 @@ class AppState: ObservableObject {
     }
     
     func addCustomDirectory(for application: Application, directory: AppDirectory) {
-        applicationManager.addCustomDirectory(for: application.bundleIdentifier, directory: directory)
+        applicationManager.addCustomDirectory(
+            for: application.id,
+            bundleIdentifier: application.bundleIdentifier,
+            directory: directory
+        )
         
         // Update the application in our list
         if let index = applications.firstIndex(where: { $0.id == application.id }) {
@@ -117,7 +121,11 @@ class AppState: ObservableObject {
     }
     
     func removeCustomDirectory(for application: Application, directoryId: UUID) {
-        applicationManager.removeCustomDirectory(for: application.bundleIdentifier, directoryId: directoryId)
+        applicationManager.removeCustomDirectory(
+            for: application.id,
+            bundleIdentifier: application.bundleIdentifier,
+            directoryId: directoryId
+        )
         
         // Update the application in our list
         if let index = applications.firstIndex(where: { $0.id == application.id }) {
@@ -132,7 +140,11 @@ class AppState: ObservableObject {
     }
 
     func updateCustomDirectory(for application: Application, directory: AppDirectory) {
-        applicationManager.updateCustomDirectory(for: application.bundleIdentifier, directory: directory)
+        applicationManager.updateCustomDirectory(
+            for: application.id,
+            bundleIdentifier: application.bundleIdentifier,
+            directory: directory
+        )
 
         // Update the application in our list
         if let index = applications.firstIndex(where: { $0.id == application.id }),
@@ -148,8 +160,12 @@ class AppState: ObservableObject {
     }
 
     func removeApplication(_ application: Application) {
-        applicationManager.removeApplication(bundleIdentifier: application.bundleIdentifier)
-        applications.removeAll { $0.bundleIdentifier == application.bundleIdentifier }
+        applicationManager.removeApplication(
+            applicationId: application.id,
+            installKey: application.installKey,
+            bundleIdentifier: application.bundleIdentifier
+        )
+        applications.removeAll { $0.id == application.id }
 
         Task { @MainActor in
             await validateAllPaths()
@@ -171,7 +187,7 @@ class AppState: ObservableObject {
             if let newApplication = await applicationManager.selectApplicationVersion(baseName: baseName, selectedApp: selectedApp) {
                 await MainActor.run {
                     // Add the selected application to our list
-                    if let existingIndex = applications.firstIndex(where: { $0.bundleIdentifier == newApplication.bundleIdentifier }) {
+                    if let existingIndex = applications.firstIndex(where: { $0.installKey == newApplication.installKey }) {
                         applications[existingIndex] = newApplication
                     } else {
                         applications.append(newApplication)

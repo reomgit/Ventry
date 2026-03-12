@@ -13,7 +13,12 @@ class AppLoader {
         let name: String
         let bundlePath: String
         let bundleIdentifier: String?
+        let version: String?
         let isSupported: Bool
+
+        var installKey: String {
+            "\(bundleIdentifier ?? "unknown")::\(bundlePath)"
+        }
 
         static func == (lhs: LoadedApp, rhs: LoadedApp) -> Bool {
             lhs.bundlePath == rhs.bundlePath
@@ -40,7 +45,19 @@ class AppLoader {
             }
         }
 
-        return loadedApps.sorted { $0.name < $1.name }
+        return loadedApps.sorted { left, right in
+            let nameOrder = left.name.localizedCaseInsensitiveCompare(right.name)
+            if nameOrder != .orderedSame {
+                return nameOrder == .orderedAscending
+            }
+
+            let versionOrder = SupportedPathResolver.compareVersionStrings(left.version, right.version)
+            if versionOrder != .orderedSame {
+                return versionOrder == .orderedDescending
+            }
+
+            return left.bundlePath.localizedStandardCompare(right.bundlePath) == .orderedAscending
+        }
     }
 
     /// Recursively finds all .app bundles in a directory
@@ -88,8 +105,9 @@ class AppLoader {
         let bundleURL = URL(fileURLWithPath: bundlePath)
         let appName = bundleURL.deletingPathExtension().lastPathComponent
 
-        // Get bundle identifier
-        let bundleIdentifier = getBundleIdentifier(from: bundlePath)
+        // Read bundle metadata once
+        let metadata = getBundleMetadata(from: bundlePath)
+        let bundleIdentifier = metadata.bundleIdentifier
 
         // Check if this app is supported
         let isSupported: Bool
@@ -103,22 +121,29 @@ class AppLoader {
             name: appName,
             bundlePath: bundlePath,
             bundleIdentifier: bundleIdentifier,
+            version: metadata.version,
             isSupported: isSupported
         )
     }
 
-    /// Reads the bundle identifier from an app bundle's Info.plist
-    private func getBundleIdentifier(from bundlePath: String) -> String? {
+    /// Reads bundle metadata from an app bundle's Info.plist
+    private func getBundleMetadata(from bundlePath: String) -> (bundleIdentifier: String?, version: String?) {
         let infoPlistPath = "\(bundlePath)/Contents/Info.plist"
 
         guard FileManager.default.fileExists(atPath: infoPlistPath),
               let plistData = FileManager.default.contents(atPath: infoPlistPath),
-              let plist = try? PropertyListSerialization.propertyList(from: plistData, format: nil) as? [String: Any],
-              let bundleIdentifier = plist["CFBundleIdentifier"] as? String else {
-            return nil
+              let plist = try? PropertyListSerialization.propertyList(from: plistData, format: nil) as? [String: Any] else {
+            return (nil, nil)
         }
 
-        return bundleIdentifier
+        let bundleIdentifier = plist["CFBundleIdentifier"] as? String
+        let shortVersion = (plist["CFBundleShortVersionString"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let buildVersion = (plist["CFBundleVersion"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let version = (shortVersion?.isEmpty == false ? shortVersion : nil) ?? (buildVersion?.isEmpty == false ? buildVersion : nil)
+
+        return (bundleIdentifier, version)
     }
 
     /// Gets the app icon for a given bundle path

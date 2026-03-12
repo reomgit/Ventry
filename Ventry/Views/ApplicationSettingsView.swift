@@ -590,7 +590,7 @@ struct ApplicationScannerView: View {
     @Environment(\.presentationMode) var presentationMode
 
     @State private var detectedApplications: [DetectedApplication] = []
-    @State private var selectedAppBundles: Set<String> = []
+    @State private var selectedInstallKeys: Set<String> = []
     @State private var isScanning = false
 
     var body: some View {
@@ -689,9 +689,9 @@ struct ApplicationScannerView: View {
                         HStack {
                             Button(action: {
                                 if selectedSelectableAppsCount == selectableSupportedAppsCount {
-                                    selectedAppBundles.removeAll()
+                                    selectedInstallKeys.removeAll()
                                 } else {
-                                    selectedAppBundles = Set(selectableSupportedApps.map { $0.bundlePath })
+                                    selectedInstallKeys = Set(selectableSupportedApps.map { $0.installKey })
                                 }
                             }) {
                                 HStack {
@@ -726,20 +726,51 @@ struct ApplicationScannerView: View {
                         Divider()
 
                         // Only show supported applications
-                        LazyVStack(spacing: 8) {
-                            ForEach(supportedApps) { app in
-                                LoadedAppRow(
-                                    app: app,
-                                    isSelected: selectedAppBundles.contains(app.bundlePath),
-                                    isAlreadyAdded: isAppAlreadyAdded(app),
-                                    onToggle: {
-                                        if selectedAppBundles.contains(app.bundlePath) {
-                                            selectedAppBundles.remove(app.bundlePath)
-                                        } else {
-                                            selectedAppBundles.insert(app.bundlePath)
+                        LazyVStack(spacing: 12) {
+                            ForEach(supportedAppGroups) { group in
+                                VStack(alignment: .leading, spacing: 8) {
+                                    if group.apps.count > 1 {
+                                        HStack {
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(group.displayName)
+                                                    .font(.subheadline)
+                                                    .fontWeight(.semibold)
+
+                                                Text(group.bundleIdentifier)
+                                                    .font(.caption2)
+                                                    .foregroundColor(.secondary)
+                                            }
+
+                                            Spacer()
+
+                                            Text("\(group.apps.count) installs")
+                                                .font(.caption)
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 4)
+                                                .background(Color.accentColor.opacity(0.15))
+                                                .foregroundColor(.accentColor)
+                                                .cornerRadius(10)
                                         }
                                     }
-                                )
+
+                                    ForEach(group.apps) { app in
+                                        LoadedAppRow(
+                                            app: app,
+                                            isSelected: selectedInstallKeys.contains(app.installKey),
+                                            isAlreadyAdded: isAppAlreadyAdded(app),
+                                            onToggle: {
+                                                if selectedInstallKeys.contains(app.installKey) {
+                                                    selectedInstallKeys.remove(app.installKey)
+                                                } else {
+                                                    selectedInstallKeys.insert(app.installKey)
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
+                                .padding(group.apps.count > 1 ? 10 : 0)
+                                .background(group.apps.count > 1 ? Color(.controlBackgroundColor).opacity(0.4) : Color.clear)
+                                .cornerRadius(10)
                             }
                         }
                         .padding(.horizontal)
@@ -758,8 +789,47 @@ struct ApplicationScannerView: View {
         .frame(minWidth: 600, minHeight: 500)
     }
 
+    private struct SupportedAppGroup: Identifiable {
+        let id: String
+        let displayName: String
+        let bundleIdentifier: String
+        let apps: [AppLoader.LoadedApp]
+    }
+
     private var supportedApps: [AppLoader.LoadedApp] {
         appState.loadedApps.filter { $0.isSupported }
+    }
+
+    private var supportedAppGroups: [SupportedAppGroup] {
+        let grouped = Dictionary(grouping: supportedApps) { app in
+            app.bundleIdentifier ?? app.bundlePath
+        }
+
+        return grouped.compactMap { key, apps in
+            guard let firstApp = apps.first else {
+                return nil
+            }
+
+            let bundleIdentifier = firstApp.bundleIdentifier ?? key
+            let displayName = appState.applicationManagerAccess.getSupportedApplication(for: bundleIdentifier)?.displayName ?? firstApp.name
+            let sortedApps = apps.sorted { left, right in
+                let versionOrder = SupportedPathResolver.compareVersionStrings(left.version, right.version)
+                if versionOrder != .orderedSame {
+                    return versionOrder == .orderedDescending
+                }
+                return left.bundlePath.localizedStandardCompare(right.bundlePath) == .orderedAscending
+            }
+
+            return SupportedAppGroup(
+                id: key,
+                displayName: displayName,
+                bundleIdentifier: bundleIdentifier,
+                apps: sortedApps
+            )
+        }
+        .sorted { left, right in
+            left.displayName.localizedCaseInsensitiveCompare(right.displayName) == .orderedAscending
+        }
     }
 
     private var supportedAppsCount: Int {
@@ -775,7 +845,7 @@ struct ApplicationScannerView: View {
     }
 
     private var selectedSelectableAppsCount: Int {
-        selectableSupportedApps.filter { selectedAppBundles.contains($0.bundlePath) }.count
+        selectableSupportedApps.filter { selectedInstallKeys.contains($0.installKey) }.count
     }
 
     private var alreadyAddedSupportedAppsCount: Int {
@@ -803,21 +873,24 @@ struct ApplicationScannerView: View {
 
         // Get selected apps
         let selectedApps = appState.loadedApps.filter {
-            selectedAppBundles.contains($0.bundlePath) && !isAppAlreadyAdded($0)
+            selectedInstallKeys.contains($0.installKey) && !isAppAlreadyAdded($0)
         }
 
         for loadedApp in selectedApps where loadedApp.isSupported {
             if let bundleIdentifier = loadedApp.bundleIdentifier,
                let supportedApp = appState.applicationManagerAccess.getSupportedApplication(for: bundleIdentifier) {
 
-                let appURL = URL(fileURLWithPath: loadedApp.bundlePath)
-                let availableDirectories = createAvailableDirectories(from: supportedApp, appName: loadedApp.name, appURL: appURL)
+                let availableDirectories = createAvailableDirectories(
+                    from: supportedApp,
+                    appVersion: loadedApp.version
+                )
 
                 if !availableDirectories.isEmpty {
                     let detectedApp = DetectedApplication(
                         name: loadedApp.name,
                         bundleIdentifier: bundleIdentifier,
                         bundlePath: loadedApp.bundlePath,
+                        appVersion: loadedApp.version,
                         availableDirectories: availableDirectories
                     )
                     detected.append(detectedApp)
@@ -832,41 +905,18 @@ struct ApplicationScannerView: View {
     }
 
     private func isAppAlreadyAdded(_ app: AppLoader.LoadedApp) -> Bool {
-        guard let bundleIdentifier = app.bundleIdentifier else { return false }
-        return appState.applications.contains { $0.bundleIdentifier == bundleIdentifier }
+        appState.applications.contains { $0.installKey == app.installKey }
     }
     
-    private func createAvailableDirectories(from supportedApp: SupportedApplication, appName: String, appURL: URL) -> [AvailableDirectory] {
-        var directories: [AvailableDirectory] = []
-
-        // Add paths from the configuration
-        for supportedPath in supportedApp.paths {
-            var expandedPath = supportedPath.path
-
-            // Handle Adobe year-based paths
-            if expandedPath.contains("{year}") {
-                let currentYear = Calendar.current.component(.year, from: Date())
-                expandedPath = expandedPath.replacingOccurrences(of: "{year}", with: String(currentYear))
-            }
-
-            // Expand home directory
-            expandedPath = expandedPath.replacingOccurrences(of: "~", with: FileManager.default.homeDirectoryForCurrentUser.path)
-
-            // Check if directory exists
-            let directoryExists = FileManager.default.fileExists(atPath: expandedPath)
-
-            let directoryType = DirectoryType(rawValue: supportedPath.type) ?? .other
-
-            let availableDir = AvailableDirectory(
-                name: supportedPath.name,
-                path: expandedPath,
-                type: directoryType,
-                isSelected: directoryExists // Only select existing directories by default
+    private func createAvailableDirectories(from supportedApp: SupportedApplication, appVersion: String?) -> [AvailableDirectory] {
+        SupportedPathResolver.resolveDirectories(for: supportedApp, appVersion: appVersion).map { resolvedDirectory in
+            AvailableDirectory(
+                name: resolvedDirectory.name,
+                path: resolvedDirectory.path,
+                type: resolvedDirectory.type,
+                isSelected: resolvedDirectory.exists
             )
-            directories.append(availableDir)
         }
-
-        return directories
     }
 
     private func addSelectedApplications() {
@@ -888,7 +938,7 @@ struct ApplicationScannerView: View {
                 )
 
                 // Add to app state if not already exists
-                if !appState.applications.contains(where: { $0.bundleIdentifier == application.bundleIdentifier }) {
+                if !appState.applications.contains(where: { $0.installKey == application.installKey }) {
                     appState.applications.append(application)
                 }
             }
@@ -933,6 +983,18 @@ struct DetectedApplicationRowView: View {
                     Text(detectedApp.bundleIdentifier)
                         .font(.caption)
                         .foregroundColor(.secondary)
+
+                    if let appVersion = detectedApp.appVersion {
+                        Text("Version \(appVersion)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Text(detectedApp.bundlePath)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
 
                 Spacer()
@@ -1005,7 +1067,6 @@ struct ManualMultipleAppSelectionView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.presentationMode) var presentationMode
 
-    @State private var selectedAppURLs: [URL] = []
     @State private var showingFileImporter = true
     @State private var detectedApps: [DetectedApplication] = []
     @State private var showingInstallationFlow = false
@@ -1150,7 +1211,7 @@ struct ManualMultipleAppSelectionView: View {
                 onComplete: { installedApps in
                     // Add installed apps to app state
                     for app in installedApps {
-                        if !appState.applications.contains(where: { $0.bundleIdentifier == app.bundleIdentifier }) {
+                        if !appState.applications.contains(where: { $0.installKey == app.installKey }) {
                             appState.applications.append(app)
                         }
                     }
@@ -1171,21 +1232,24 @@ struct ManualMultipleAppSelectionView: View {
     private func processSelectedApps(urls: [URL]) {
         errorMessage = nil
         var newDetectedApps: [DetectedApplication] = []
-        var existingBundleIdentifiers = Set(detectedApps.map { $0.bundleIdentifier })
+        var existingInstallKeys = Set(detectedApps.map(\.installKey))
 
         for url in urls {
-            guard let bundleIdentifier = getBundleIdentifier(for: url) else {
+            guard let metadata = getBundleMetadata(for: url) else {
                 errorMessage = "Could not read bundle identifier from \(url.lastPathComponent)"
                 continue
             }
 
+            let bundleIdentifier = metadata.bundleIdentifier
+            let installKey = "\(bundleIdentifier)::\(url.path)"
+
             // Skip if already added to the detected list
-            if existingBundleIdentifiers.contains(bundleIdentifier) {
+            if existingInstallKeys.contains(installKey) {
                 continue
             }
-            existingBundleIdentifiers.insert(bundleIdentifier)
+            existingInstallKeys.insert(installKey)
 
-            let isAlreadyAdded = appState.applications.contains { $0.bundleIdentifier == bundleIdentifier }
+            let isAlreadyAdded = appState.applications.contains { $0.installKey == installKey }
 
             let appName = url.deletingPathExtension().lastPathComponent
 
@@ -1193,13 +1257,14 @@ struct ManualMultipleAppSelectionView: View {
             var availableDirectories: [AvailableDirectory] = []
             if !isAlreadyAdded,
                let supportedApp = appState.applicationManagerAccess.getSupportedApplication(for: bundleIdentifier) {
-                availableDirectories = createAvailableDirectories(from: supportedApp, appName: appName, appURL: url)
+                availableDirectories = createAvailableDirectories(from: supportedApp, appVersion: metadata.version)
             }
 
             let detectedApp = DetectedApplication(
                 name: appName,
                 bundleIdentifier: bundleIdentifier,
                 bundlePath: url.path,
+                appVersion: metadata.version,
                 availableDirectories: availableDirectories,
                 isAlreadyAdded: isAlreadyAdded
             )
@@ -1213,40 +1278,30 @@ struct ManualMultipleAppSelectionView: View {
         detectedApps.removeAll { $0.id == app.id }
     }
 
-    private func getBundleIdentifier(for appURL: URL) -> String? {
-        guard let bundle = Bundle(url: appURL) else { return nil }
-        return bundle.bundleIdentifier
-    }
-
-    private func createAvailableDirectories(from supportedApp: SupportedApplication, appName: String, appURL: URL) -> [AvailableDirectory] {
-        var directories: [AvailableDirectory] = []
-
-        for supportedPath in supportedApp.paths {
-            var expandedPath = supportedPath.path
-
-            // Handle Adobe year-based paths
-            if expandedPath.contains("{year}") {
-                let currentYear = Calendar.current.component(.year, from: Date())
-                expandedPath = expandedPath.replacingOccurrences(of: "{year}", with: String(currentYear))
-            }
-
-            // Expand home directory
-            expandedPath = expandedPath.replacingOccurrences(of: "~", with: FileManager.default.homeDirectoryForCurrentUser.path)
-
-            // Check if directory exists
-            let directoryExists = FileManager.default.fileExists(atPath: expandedPath)
-            let directoryType = DirectoryType(rawValue: supportedPath.type) ?? .other
-
-            let availableDir = AvailableDirectory(
-                name: supportedPath.name,
-                path: expandedPath,
-                type: directoryType,
-                isSelected: directoryExists
-            )
-            directories.append(availableDir)
+    private func getBundleMetadata(for appURL: URL) -> (bundleIdentifier: String, version: String?)? {
+        guard let bundle = Bundle(url: appURL),
+              let bundleIdentifier = bundle.bundleIdentifier else {
+            return nil
         }
 
-        return directories
+        let shortVersion = (bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let buildVersion = (bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let version = (shortVersion?.isEmpty == false ? shortVersion : nil) ?? (buildVersion?.isEmpty == false ? buildVersion : nil)
+
+        return (bundleIdentifier, version)
+    }
+
+    private func createAvailableDirectories(from supportedApp: SupportedApplication, appVersion: String?) -> [AvailableDirectory] {
+        SupportedPathResolver.resolveDirectories(for: supportedApp, appVersion: appVersion).map { resolvedDirectory in
+            AvailableDirectory(
+                name: resolvedDirectory.name,
+                path: resolvedDirectory.path,
+                type: resolvedDirectory.type,
+                isSelected: resolvedDirectory.exists
+            )
+        }
     }
 }
 
@@ -1308,6 +1363,18 @@ struct MultipleAppRowView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
+
+                if let appVersion = detectedApp.appVersion {
+                    Text("Version \(appVersion)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+
+                Text(detectedApp.bundlePath)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
 
             Spacer()
@@ -1357,9 +1424,20 @@ struct LoadedAppRow: View {
 
                 // App info
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(app.name)
-                        .font(.headline)
-                        .foregroundColor(.primary)
+                    HStack(spacing: 6) {
+                        Text(app.name)
+                            .font(.headline)
+                            .foregroundColor(.primary)
+
+                        if let version = app.version {
+                            Text("v\(version)")
+                                .font(.caption2)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color(.secondarySystemFill))
+                                .cornerRadius(4)
+                        }
+                    }
 
                     if isAlreadyAdded {
                         Text("Already Added")
@@ -1376,6 +1454,12 @@ struct LoadedAppRow: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+
+                    Text(app.bundlePath)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
 
                 Spacer()

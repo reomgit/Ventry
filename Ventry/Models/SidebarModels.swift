@@ -42,6 +42,10 @@ struct Application: Identifiable, Codable, Equatable {
     let bundlePath: String?
     var directories: [AppDirectory]
 
+    var installKey: String {
+        "\(bundleIdentifier)::\(bundlePath ?? id.uuidString)"
+    }
+
     init(name: String, bundleIdentifier: String, iconName: String? = nil, bundlePath: String? = nil, directories: [AppDirectory] = []) {
         self.id = UUID()
         self.name = name

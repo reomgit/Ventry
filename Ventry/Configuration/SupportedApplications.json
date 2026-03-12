@@ -45,7 +45,7 @@
       "paths": [
         {
           "name": "Plugins",
-          "path": "/Library/Application Support/Blender/3.5/scripts/addons/",
+          "path": "/Library/Application Support/Blender/{version}/scripts/addons/",
           "type": "plugins",
           "icon": "plus.app"
         }

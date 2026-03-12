@@ -60,8 +60,12 @@ final class ApplicationManager: ObservableObject {
         }
     }
     
-    func addCustomDirectory(for bundleIdentifier: String, directory: AppDirectory) {
-        if let index = storedApplications.firstIndex(where: { $0.bundleIdentifier == bundleIdentifier }) {
+    func addCustomDirectory(for applicationId: UUID, bundleIdentifier: String, directory: AppDirectory) {
+        if let index = storedApplications.firstIndex(where: { $0.id == applicationId }) {
+            var app = storedApplications[index]
+            app.addDirectory(directory)
+            storedApplications[index] = app
+        } else if let index = storedApplications.firstIndex(where: { $0.bundleIdentifier == bundleIdentifier && $0.bundlePath == nil }) {
             var app = storedApplications[index]
             app.addDirectory(directory)
             storedApplications[index] = app
@@ -72,16 +76,27 @@ final class ApplicationManager: ObservableObject {
         }
     }
     
-    func removeCustomDirectory(for bundleIdentifier: String, directoryId: UUID) {
-        if let index = storedApplications.firstIndex(where: { $0.bundleIdentifier == bundleIdentifier }) {
+    func removeCustomDirectory(for applicationId: UUID, bundleIdentifier: String, directoryId: UUID) {
+        if let index = storedApplications.firstIndex(where: { $0.id == applicationId }) {
+            var app = storedApplications[index]
+            app.removeDirectory(withId: directoryId)
+            storedApplications[index] = app
+        } else if let index = storedApplications.firstIndex(where: { $0.bundleIdentifier == bundleIdentifier && $0.bundlePath == nil }) {
             var app = storedApplications[index]
             app.removeDirectory(withId: directoryId)
             storedApplications[index] = app
         }
     }
 
-    func updateCustomDirectory(for bundleIdentifier: String, directory: AppDirectory) {
-        guard let appIndex = storedApplications.firstIndex(where: { $0.bundleIdentifier == bundleIdentifier }),
+    func updateCustomDirectory(for applicationId: UUID, bundleIdentifier: String, directory: AppDirectory) {
+        let appIndex: Int?
+        if let index = storedApplications.firstIndex(where: { $0.id == applicationId }) {
+            appIndex = index
+        } else {
+            appIndex = storedApplications.firstIndex(where: { $0.bundleIdentifier == bundleIdentifier && $0.bundlePath == nil })
+        }
+
+        guard let appIndex,
               let dirIndex = storedApplications[appIndex].directories.firstIndex(where: { $0.id == directory.id }) else {
             return
         }
@@ -91,9 +106,25 @@ final class ApplicationManager: ObservableObject {
         storedApplications[appIndex] = app
     }
 
-    func removeApplication(bundleIdentifier: String) {
-        storedApplications.removeAll { $0.bundleIdentifier == bundleIdentifier }
-        pendingMultipleInstallations.removeAll { $0.1.contains(where: { $0.bundleIdentifier == bundleIdentifier }) }
+    func removeApplication(applicationId: UUID, installKey: String, bundleIdentifier: String) {
+        let removedInstallKeys = Set(
+            storedApplications
+                .filter { app in
+                    app.id == applicationId
+                        || app.installKey == installKey
+                        || (app.bundleIdentifier == bundleIdentifier && app.bundlePath == nil)
+                }
+                .map(\.installKey)
+        )
+
+        storedApplications.removeAll { app in
+            app.id == applicationId
+                || app.installKey == installKey
+                || (app.bundleIdentifier == bundleIdentifier && app.bundlePath == nil)
+        }
+        pendingMultipleInstallations.removeAll { pendingEntry in
+            pendingEntry.1.contains { removedInstallKeys.contains($0.installKey) }
+        }
         if pendingMultipleInstallations.isEmpty {
             showingMultipleInstallationsAlert = false
         }
@@ -119,7 +150,7 @@ final class ApplicationManager: ObservableObject {
                 showingMultipleInstallationsAlert = false
             }
             // Store/update internal list
-            if let existing = storedApplications.firstIndex(where: { $0.bundleIdentifier == application.bundleIdentifier }) {
+            if let existing = storedApplications.firstIndex(where: { $0.installKey == application.installKey }) {
                 storedApplications[existing] = application
             } else {
                 storedApplications.append(application)
@@ -212,6 +243,10 @@ struct ApplicationScannerDetectedApplication: Identifiable, Equatable {
     let bundleIdentifier: String
     let appURL: URL
     let installationPath: String
+
+    var installKey: String {
+        "\(bundleIdentifier)::\(installationPath)"
+    }
 }
 
 // MARK: - JSON Data Structures

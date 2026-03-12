@@ -85,7 +85,7 @@ struct SidebarView: View {
                     }
                 } else {
                     ForEach(appState.applications) { application in
-                        NavigationLink(destination: ApplicationDirectoryView(bundleIdentifier: application.bundleIdentifier)) {
+                        NavigationLink(destination: ApplicationDirectoryView(applicationId: application.id)) {
                             ApplicationRowView(application: application)
                         }
                         .contextMenu {
