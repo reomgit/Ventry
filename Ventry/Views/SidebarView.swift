@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct SidebarView: View {
     @EnvironmentObject var appState: AppState
@@ -124,6 +125,9 @@ struct SidebarView: View {
         }
         .navigationTitle("Library")
         .listStyle(SidebarListStyle())
+        .onAppear {
+            appState.refreshZXPInstallerStatus(shouldPrompt: false)
+        }
         .onKeyPress(.upArrow) {
             return .handled
         }
@@ -136,6 +140,13 @@ struct SidebarView: View {
         .onKeyPress(.rightArrow) {
             return .handled
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                Divider()
+                zxpInstallerFooter
+                    .background(Color(nsColor: .windowBackgroundColor))
+            }
+        }
         .alert("Remove App From Ventry?", isPresented: $showingDeleteApplicationAlert, presenting: pendingDeleteApplication) { app in
             Button("Remove App", role: .destructive) {
                 appState.removeApplication(app)
@@ -147,6 +158,84 @@ struct SidebarView: View {
         } message: { app in
             Text("This will remove \(app.name) from Ventry and delete all \(app.directories.count) path entr\(app.directories.count == 1 ? "y" : "ies") assigned to it.")
         }
+    }
+
+    private var zxpInstallerFooter: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(appState.isZXPInstallerConnected ? Color.green : Color.secondary.opacity(0.6))
+                    .frame(width: 8, height: 8)
+
+                Text(zxpStatusText)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            HStack(spacing: 8) {
+                Button(primaryZXPActionTitle) {
+                    handlePrimaryZXPAction()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .lineLimit(1)
+
+                if appState.isZXPInstallerConnected {
+                    Button("Disconnect") {
+                        appState.disconnectZXPInstaller()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+    }
+
+    private var zxpStatusText: String {
+        if appState.isZXPInstallerConnected {
+            return "ZXP Installer connected"
+        }
+
+        if appState.isZXPInstallerInstalled {
+            return "ZXP Installer detected"
+        }
+
+        return "ZXP Installer not installed"
+    }
+
+    private var primaryZXPActionTitle: String {
+        if appState.isZXPInstallerConnected {
+            return "Open ZXP Installer"
+        }
+
+        if appState.isZXPInstallerInstalled {
+            return "Connect ZXP Installer"
+        }
+
+        return "Download ZXP Installer"
+    }
+
+    private func handlePrimaryZXPAction() {
+        if appState.isZXPInstallerConnected {
+            openDetectedZXPInstaller()
+            return
+        }
+
+        if appState.isZXPInstallerInstalled {
+            appState.connectZXPInstaller()
+            openDetectedZXPInstaller()
+            return
+        }
+
+        NSWorkspace.shared.open(appState.zxpInstallerDownloadURL)
+    }
+
+    private func openDetectedZXPInstaller() {
+        guard let zxpInstallerAppURL = appState.zxpInstallerAppURL else { return }
+        _ = NSWorkspace.shared.open(zxpInstallerAppURL)
     }
 }
 

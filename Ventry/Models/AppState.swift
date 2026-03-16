@@ -15,9 +15,18 @@ class AppState: ObservableObject {
     @Published var loadedApps: [AppLoader.LoadedApp] = []
     @Published var isLoadingApps = false
     @Published var hasAccess = false
+    @Published var isZXPInstallerInstalled = false
+    @Published var isZXPInstallerConnected = false
+    @Published var zxpInstallerAppURL: URL?
+    @Published var showingZXPConnectionPrompt = false
 
     private let applicationManager = ApplicationManager()
     private var cancellables = Set<AnyCancellable>()
+    private let zxpInstallerConnectedKey = "ventry.zxpInstaller.connected"
+    private let zxpInstallerPromptAnsweredKey = "ventry.zxpInstaller.promptAnswered"
+    private let applicationsDirectoryURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
+
+    let zxpInstallerDownloadURL = URL(string: "https://aescripts.com/learn/zxp-installer/")!
 
     // Provide access to applicationManager for views that need it
     var applicationManagerAccess: ApplicationManager {
@@ -25,8 +34,10 @@ class AppState: ObservableObject {
     }
     
     init() {
+        isZXPInstallerConnected = UserDefaults.standard.bool(forKey: zxpInstallerConnectedKey)
         setupBindings()
         _ = AppStorageManager.shared.prepareDirectories()
+        refreshZXPInstallerStatus()
 
         hasAccess = true
 
@@ -206,6 +217,62 @@ class AppState: ObservableObject {
     func getAvailableApplications() async -> [String] {
         return await applicationManager.getAvailableApplications()
     }
+
+    func refreshZXPInstallerStatus(shouldPrompt: Bool = true) {
+        let detectedAppURL = detectZXPInstallerAppURL()
+
+        zxpInstallerAppURL = detectedAppURL
+        isZXPInstallerInstalled = detectedAppURL != nil
+
+        if detectedAppURL == nil, isZXPInstallerConnected {
+            isZXPInstallerConnected = false
+            UserDefaults.standard.set(false, forKey: zxpInstallerConnectedKey)
+        }
+
+        guard shouldPrompt else { return }
+        let hasAnsweredPrompt = UserDefaults.standard.bool(forKey: zxpInstallerPromptAnsweredKey)
+        showingZXPConnectionPrompt = isZXPInstallerInstalled && !isZXPInstallerConnected && !hasAnsweredPrompt
+    }
+
+    func connectZXPInstaller() {
+        guard isZXPInstallerInstalled else { return }
+        isZXPInstallerConnected = true
+        showingZXPConnectionPrompt = false
+        UserDefaults.standard.set(true, forKey: zxpInstallerConnectedKey)
+        UserDefaults.standard.set(true, forKey: zxpInstallerPromptAnsweredKey)
+    }
+
+    func disconnectZXPInstaller() {
+        isZXPInstallerConnected = false
+        UserDefaults.standard.set(false, forKey: zxpInstallerConnectedKey)
+    }
+
+    func dismissZXPConnectionPrompt() {
+        showingZXPConnectionPrompt = false
+        UserDefaults.standard.set(true, forKey: zxpInstallerPromptAnsweredKey)
+    }
+
+    private func detectZXPInstallerAppURL() -> URL? {
+        guard let appURLs = try? FileManager.default.contentsOfDirectory(
+            at: applicationsDirectoryURL,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return nil
+        }
+
+        return appURLs.first { appURL in
+            guard appURL.pathExtension.lowercased() == "app" else { return false }
+
+            let appName = appURL.deletingPathExtension().lastPathComponent.lowercased()
+            if appName.contains("aescripts + aeplugins manager") {
+                return true
+            }
+
+            return appName.contains("aescripts") && appName.contains("manager")
+        }
+    }
+
     func loadSavedCollections() async {
         do {
             let loaded = try CollectionManager.shared.loadAllCollections()

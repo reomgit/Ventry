@@ -20,11 +20,13 @@ struct VentryApp: App {
             .onAppear {
                 _ = AppStorageManager.shared.prepareDirectories()
                 PermissionManager.shared.refreshPermissionState()
+                appState.refreshZXPInstallerStatus()
             }
             .onChange(of: scenePhase) { _, newPhase in
                 guard newPhase == .active else { return }
 
                 PermissionManager.shared.refreshPermissionState()
+                appState.refreshZXPInstallerStatus()
 
                 Task {
                     await appState.revalidatePaths()

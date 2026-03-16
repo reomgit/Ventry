@@ -40,6 +40,16 @@ struct ContentView: View {
         .sheet(isPresented: $permissionManager.needsPathRevalidation) {
             PathValidationView()
         }
+        .alert("Connect ZXP Installer?", isPresented: $appState.showingZXPConnectionPrompt) {
+            Button("Connect") {
+                appState.connectZXPInstaller()
+            }
+            Button("Not Now", role: .cancel) {
+                appState.dismissZXPConnectionPrompt()
+            }
+        } message: {
+            Text("Ventry found aescripts ZXP Installer in your Applications folder. Connect it now?")
+        }
     }
 }
 
