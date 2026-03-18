@@ -5,8 +5,11 @@ struct FolderBrowserView: View {
     let title: String
     let path: String
     var initiallySelectedPath: String? = nil
+    var parentPageTitle: String? = nil
+    var onReturnToParentPage: (() -> Void)? = nil
 
     @EnvironmentObject var appState: AppState
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.undoManager) private var undoManager
     @StateObject private var viewModel = FolderBrowserViewModel()
     @AppStorage("folderBrowserViewMode") private var viewMode: BrowserViewMode = .grid
@@ -112,7 +115,35 @@ struct FolderBrowserView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .navigationTitle(title)
+        .navigationTitle(parentPageTitle == nil ? title : "")
+        .toolbar {
+            if parentPageTitle != nil {
+                ToolbarItem(placement: .navigation) {
+                    Button(action: {
+                        if let onReturnToParentPage {
+                            onReturnToParentPage()
+                        } else {
+                            dismiss()
+                        }
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.left")
+                                .font(.headline)
+
+                            Text(parentPageTitle ?? title)
+                                .font(.headline)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                    }
+                    .buttonStyle(.plain)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .help("Back to \(parentPageTitle ?? title)")
+                }
+            }
+        }
         .onAppear {
             startKeyboardMonitor()
             viewModel.bindUndoManager(undoManager)

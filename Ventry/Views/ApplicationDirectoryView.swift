@@ -3,6 +3,7 @@ import SwiftUI
 struct ApplicationDirectoryView: View {
     @EnvironmentObject var appState: AppState
     let applicationId: UUID
+    @State private var selectedDirectory: AppDirectory?
     
     private let columns = [
         GridItem(.adaptive(minimum: 150, maximum: 200), spacing: 16)
@@ -15,23 +16,32 @@ struct ApplicationDirectoryView: View {
     var body: some View {
         Group {
             if let application {
-                ScrollView {
-                    LazyVGrid(columns: columns, spacing: 16) {
-                        ForEach(application.directories) { directory in
-                            NavigationLink(
-                                destination: FolderBrowserView(
-                                    title: "\(application.name) • \(directory.name)",
-                                    path: directory.path
-                                )
-                            ) {
-                                DirectoryCardView(directory: directory)
-                            }
-                            .buttonStyle(.plain)
+                if let selectedDirectory {
+                    FolderBrowserView(
+                        title: "\(application.name) • \(selectedDirectory.name)",
+                        path: selectedDirectory.path,
+                        parentPageTitle: application.name,
+                        onReturnToParentPage: {
+                            self.selectedDirectory = nil
                         }
+                    )
+                    .id(selectedDirectory.id)
+                } else {
+                    ScrollView {
+                        LazyVGrid(columns: columns, spacing: 16) {
+                            ForEach(application.directories) { directory in
+                                Button {
+                                    selectedDirectory = directory
+                                } label: {
+                                    DirectoryCardView(directory: directory)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding()
                     }
-                    .padding()
+                    .navigationTitle(application.name)
                 }
-                .navigationTitle(application.name)
             } else {
                 VStack(spacing: 12) {
                     Image(systemName: "app.badge.xmark")
