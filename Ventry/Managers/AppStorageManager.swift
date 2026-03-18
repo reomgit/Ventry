@@ -6,7 +6,9 @@ final class AppStorageManager {
     let internalRootDirectory: URL
     let collectionsDirectory: URL
     let documentsDirectory: URL
+    let userVisibleRootDirectory: URL
     let designAssetsDirectory: URL
+    let starredItemsStorageURL: URL
 
     private init() {
         let applicationSupportDirectory = FileManager.default.urls(
@@ -18,9 +20,12 @@ final class AppStorageManager {
         internalRootDirectory = applicationSupportDirectory.appendingPathComponent("Ventry", isDirectory: true)
         collectionsDirectory = internalRootDirectory.appendingPathComponent("Collections", isDirectory: true)
         documentsDirectory = Self.resolvedDocumentsDirectory()
-        designAssetsDirectory = documentsDirectory
+        userVisibleRootDirectory = documentsDirectory
             .appendingPathComponent("Ventry", isDirectory: true)
+        designAssetsDirectory = userVisibleRootDirectory
             .appendingPathComponent("Design Assets", isDirectory: true)
+        starredItemsStorageURL = userVisibleRootDirectory
+            .appendingPathComponent("Starred Items.json", isDirectory: false)
     }
 
     @discardableResult
@@ -42,6 +47,19 @@ final class AppStorageManager {
         do {
             try FileManager.default.createDirectory(
                 at: designAssetsDirectory,
+                withIntermediateDirectories: true
+            )
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    @discardableResult
+    func prepareUserVisibleRootDirectory() -> Bool {
+        do {
+            try FileManager.default.createDirectory(
+                at: userVisibleRootDirectory,
                 withIntermediateDirectories: true
             )
             return true

@@ -17,6 +17,7 @@ class AppState: ObservableObject {
     @Published var hasAccess = false
 
     private let applicationManager = ApplicationManager()
+    private let starredItemsStore = StarredItemsStore.shared
     private var cancellables = Set<AnyCancellable>()
 
     // Provide access to applicationManager for views that need it
@@ -33,6 +34,7 @@ class AppState: ObservableObject {
         Task {
             await loadApplicationsFromSystem()
             await loadSavedCollections()
+            await loadSavedStarredItems()
             await validateAllPaths()
         }
     }
@@ -75,6 +77,23 @@ class AppState: ObservableObject {
                 if showing, let firstPending = self?.applicationManager.pendingMultipleInstallations.first {
                     self?.pendingInstallationSelection = firstPending
                     self?.showingMultipleInstallationsSheet = true
+                }
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .starredItemsDidChange)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                guard let self else { return }
+
+                if let items = notification.object as? [StarredItem] {
+                    self.starredItems = items
+                } else {
+                    self.starredItems = self.starredItemsStore.currentItems()
+                }
+
+                Task { @MainActor in
+                    await self.validateAllPaths()
                 }
             }
             .store(in: &cancellables)
@@ -234,6 +253,59 @@ class AppState: ObservableObject {
         }
     }
 
+    func loadSavedStarredItems() async {
+        do {
+            let loaded = try starredItemsStore.reloadFromDisk()
+            await MainActor.run {
+                self.starredItems = loaded
+                print("Loaded \(loaded.count) starred items from disk")
+            }
+        } catch {
+            await MainActor.run {
+                self.starredItems = starredItemsStore.currentItems()
+            }
+            print("Failed to load starred items: \(error)")
+        }
+    }
+
+    func isStarred(_ item: FolderBrowserItem) -> Bool {
+        isStarred(path: item.url.standardizedFileURL.path)
+    }
+
+    func isStarred(path: String) -> Bool {
+        starredItems.contains { $0.path == path }
+    }
+
+    func addStarredItems(_ items: [FolderBrowserItem]) throws {
+        let newItems = items.map { item in
+            StarredItem(
+                name: item.displayName,
+                type: item.isDirectory ? .folder : .file,
+                path: item.url.standardizedFileURL.path
+            )
+        }
+
+        try starredItemsStore.add(items: newItems)
+    }
+
+    func removeStarredItems(_ items: [FolderBrowserItem]) throws {
+        for item in items {
+            try starredItemsStore.remove(path: item.url.standardizedFileURL.path)
+        }
+    }
+
+    func removeStarredItem(_ item: StarredItem) throws {
+        try starredItemsStore.remove(item)
+    }
+
+    func moveStarredItems(fromOffsets source: IndexSet, toOffset destination: Int) {
+        do {
+            try starredItemsStore.moveItems(fromOffsets: source, toOffset: destination)
+        } catch {
+            print("Failed to reorder starred items: \(error)")
+        }
+    }
+
     func addCollection(_ collection: Collection) {
         collections.append(collection)
 
@@ -307,6 +379,7 @@ class AppState: ObservableObject {
 
     /// Re-validates paths after permission changes
     func revalidatePaths() async {
+        await loadSavedStarredItems()
         await validateAllPaths()
     }
 }

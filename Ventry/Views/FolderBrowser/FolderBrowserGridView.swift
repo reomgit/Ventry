@@ -2,6 +2,7 @@ import SwiftUI
 
 struct FolderBrowserGridView<ContextMenu: View>: View {
     let items: [FolderBrowserItem]
+    let starredPaths: Set<String>
     @Binding var selectedItems: Set<FolderBrowserItem>
     let onItemMouseDown: (FolderBrowserItem, NSEvent) -> Void
     let onColumnCountChange: (Int) -> Void
@@ -25,6 +26,7 @@ struct FolderBrowserGridView<ContextMenu: View>: View {
                     ForEach(items) { item in
                         GridItemView(
                             item: item,
+                            isStarred: starredPaths.contains(item.url.standardizedFileURL.path),
                             isSelected: selectedItems.contains(item),
                             isHovered: hoveredItem == item,
                             isDropTargeted: dropTargetItemID == item.id,
@@ -110,6 +112,7 @@ struct FolderBrowserGridView<ContextMenu: View>: View {
 
 private struct GridItemView: View {
     let item: FolderBrowserItem
+    let isStarred: Bool
     let isSelected: Bool
     let isHovered: Bool
     let isDropTargeted: Bool
@@ -135,7 +138,8 @@ private struct GridItemView: View {
                 FolderBrowserItemIconView(
                     item: item,
                     size: iconSize,
-                    showCreativeBadge: true
+                    showCreativeBadge: true,
+                    showStarBadge: isStarred
                 )
             }
             .overlay(

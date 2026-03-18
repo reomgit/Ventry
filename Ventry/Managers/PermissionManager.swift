@@ -353,9 +353,12 @@ class PermissionManager: ObservableObject {
     private func isManagedDocumentsPath(_ path: String) -> Bool {
         let normalizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
         let documentsPath = AppStorageManager.shared.documentsDirectory.path
+        let userVisibleRootPath = AppStorageManager.shared.userVisibleRootDirectory.path
         let designAssetsPath = AppStorageManager.shared.designAssetsDirectory.path
 
         return normalizedPath == documentsPath ||
+            normalizedPath == userVisibleRootPath ||
+            normalizedPath.hasPrefix(userVisibleRootPath + "/") ||
             normalizedPath == designAssetsPath ||
             normalizedPath.hasPrefix(designAssetsPath + "/")
     }
@@ -370,6 +373,13 @@ class PermissionManager: ObservableObject {
         }
 
         let normalizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
+        if normalizedPath == AppStorageManager.shared.userVisibleRootDirectory.path ||
+           normalizedPath.hasPrefix(AppStorageManager.shared.userVisibleRootDirectory.path + "/") {
+            guard AppStorageManager.shared.prepareUserVisibleRootDirectory() else {
+                return .denied
+            }
+        }
+
         if normalizedPath == AppStorageManager.shared.designAssetsDirectory.path ||
            normalizedPath.hasPrefix(AppStorageManager.shared.designAssetsDirectory.path + "/") {
             guard AppStorageManager.shared.prepareDesignAssetsDirectory() else {

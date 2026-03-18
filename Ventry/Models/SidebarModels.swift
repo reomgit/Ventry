@@ -2,14 +2,14 @@ import Foundation
 import SwiftUI
 
 // MARK: - Starred Items
-struct StarredItem: Identifiable, Codable {
+struct StarredItem: Identifiable, Codable, Equatable {
     let id: UUID
-    let name: String
+    var name: String
     let type: StarredItemType
-    let path: String?
+    var path: String?
     
-    init(name: String, type: StarredItemType, path: String? = nil) {
-        self.id = UUID()
+    init(id: UUID = UUID(), name: String, type: StarredItemType, path: String? = nil) {
+        self.id = id
         self.name = name
         self.type = type
         self.path = path
@@ -30,6 +30,186 @@ enum StarredItemType: String, CaseIterable, Codable {
         case .collection:
             return "tray.fill"
         }
+    }
+}
+
+extension Notification.Name {
+    static let starredItemsDidChange = Notification.Name("StarredItemsDidChange")
+}
+
+struct RemovedStarredItemRecord {
+    let item: StarredItem
+    let originalIndex: Int
+}
+
+final class StarredItemsStore {
+    static let shared = StarredItemsStore()
+
+    private let fileManager = FileManager.default
+    private var cachedItems: [StarredItem] = []
+    private var hasLoadedFromDisk = false
+
+    private init() {}
+
+    func currentItems() -> [StarredItem] {
+        ensureLoadedFromDisk()
+        return cachedItems
+    }
+
+    func reloadFromDisk() throws -> [StarredItem] {
+        let loadedItems = try loadItemsFromDisk()
+        cachedItems = loadedItems
+        hasLoadedFromDisk = true
+        postChangeNotification()
+        return cachedItems
+    }
+
+    func isStarred(_ url: URL) -> Bool {
+        let normalizedPath = normalizedPath(for: url)
+        return currentItems().contains { $0.path == normalizedPath }
+    }
+
+    func add(items newItems: [StarredItem]) throws {
+        try mutateItems { items in
+            for item in newItems {
+                guard let path = item.path, !path.isEmpty else { continue }
+                if items.contains(where: { $0.path == path }) {
+                    continue
+                }
+                items.append(item)
+            }
+        }
+    }
+
+    func remove(path: String) throws {
+        try mutateItems { items in
+            items.removeAll { $0.path == path }
+        }
+    }
+
+    func remove(_ item: StarredItem) throws {
+        try mutateItems { items in
+            items.removeAll { $0.id == item.id }
+        }
+    }
+
+    @discardableResult
+    func removeItems(atOrInside url: URL) throws -> [RemovedStarredItemRecord] {
+        let sourcePath = normalizedPath(for: url)
+        var removedItems: [RemovedStarredItemRecord] = []
+
+        try mutateItems { items in
+            removedItems = items.enumerated().compactMap { index, item in
+                guard let itemPath = item.path else { return nil }
+                guard itemPath == sourcePath || itemPath.hasPrefix(sourcePath + "/") else {
+                    return nil
+                }
+                return RemovedStarredItemRecord(item: item, originalIndex: index)
+            }
+
+            items.removeAll { item in
+                guard let itemPath = item.path else { return false }
+                return itemPath == sourcePath || itemPath.hasPrefix(sourcePath + "/")
+            }
+        }
+
+        return removedItems
+    }
+
+    func restore(_ itemsToRestore: [RemovedStarredItemRecord]) throws {
+        guard !itemsToRestore.isEmpty else { return }
+
+        try mutateItems { items in
+            for record in itemsToRestore.sorted(by: { $0.originalIndex < $1.originalIndex }) {
+                let item = record.item
+                guard let path = item.path, !path.isEmpty else { continue }
+                if items.contains(where: { $0.path == path }) {
+                    continue
+                }
+
+                let insertionIndex = min(max(record.originalIndex, 0), items.count)
+                items.insert(item, at: insertionIndex)
+            }
+        }
+    }
+
+    func moveItems(fromOffsets source: IndexSet, toOffset destination: Int) throws {
+        try mutateItems { items in
+            items.move(fromOffsets: source, toOffset: destination)
+        }
+    }
+
+    func replacePathPrefix(from sourceURL: URL, to destinationURL: URL) throws {
+        let sourcePath = normalizedPath(for: sourceURL)
+        let destinationPath = normalizedPath(for: destinationURL)
+        guard sourcePath != destinationPath else { return }
+
+        try mutateItems { items in
+            for index in items.indices {
+                guard let itemPath = items[index].path else { continue }
+                guard itemPath == sourcePath || itemPath.hasPrefix(sourcePath + "/") else { continue }
+
+                let suffix = String(itemPath.dropFirst(sourcePath.count))
+                let updatedPath = destinationPath + suffix
+                items[index].path = updatedPath
+                items[index].name = URL(fileURLWithPath: updatedPath).lastPathComponent
+            }
+        }
+    }
+
+    private func mutateItems(_ mutation: (inout [StarredItem]) -> Void) throws {
+        ensureLoadedFromDisk()
+
+        var updatedItems = cachedItems
+        mutation(&updatedItems)
+
+        try persist(items: updatedItems)
+        cachedItems = updatedItems
+        postChangeNotification()
+    }
+
+    private func ensureLoadedFromDisk() {
+        guard !hasLoadedFromDisk else { return }
+
+        do {
+            cachedItems = try loadItemsFromDisk()
+            hasLoadedFromDisk = true
+        } catch {
+            cachedItems = []
+            hasLoadedFromDisk = true
+            print("Failed to load starred items: \(error)")
+        }
+    }
+
+    private func loadItemsFromDisk() throws -> [StarredItem] {
+        let storageURL = AppStorageManager.shared.starredItemsStorageURL
+        guard fileManager.fileExists(atPath: storageURL.path) else {
+            return []
+        }
+
+        let data = try Data(contentsOf: storageURL)
+        return try JSONDecoder().decode([StarredItem].self, from: data)
+    }
+
+    private func persist(items: [StarredItem]) throws {
+        let rootDirectory = AppStorageManager.shared.userVisibleRootDirectory
+        try fileManager.createDirectory(
+            at: rootDirectory,
+            withIntermediateDirectories: true
+        )
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(items)
+        try data.write(to: AppStorageManager.shared.starredItemsStorageURL, options: .atomic)
+    }
+
+    private func postChangeNotification() {
+        NotificationCenter.default.post(name: .starredItemsDidChange, object: cachedItems)
+    }
+
+    private func normalizedPath(for url: URL) -> String {
+        url.standardizedFileURL.path
     }
 }
 

@@ -4,7 +4,9 @@ import Quartz
 struct FolderBrowserView: View {
     let title: String
     let path: String
+    var initiallySelectedPath: String? = nil
 
+    @EnvironmentObject var appState: AppState
     @Environment(\.undoManager) private var undoManager
     @StateObject private var viewModel = FolderBrowserViewModel()
     @AppStorage("folderBrowserViewMode") private var viewMode: BrowserViewMode = .grid
@@ -22,6 +24,10 @@ struct FolderBrowserView: View {
 
     private var undoManagerIdentity: ObjectIdentifier? {
         undoManager.map(ObjectIdentifier.init)
+    }
+
+    private var starredPaths: Set<String> {
+        Set(appState.starredItems.compactMap(\.path))
     }
 
     var body: some View {
@@ -112,7 +118,7 @@ struct FolderBrowserView: View {
             viewModel.bindUndoManager(undoManager)
             if viewModel.currentDirectory == nil {
                 let url = URL(fileURLWithPath: path)
-                viewModel.navigateTo(url: url)
+                viewModel.navigateTo(url: url, selectingPath: initiallySelectedPath)
             }
         }
         .onDisappear {
@@ -120,7 +126,7 @@ struct FolderBrowserView: View {
         }
         .onChange(of: path) { _, newPath in
             let url = URL(fileURLWithPath: newPath)
-            viewModel.navigateTo(url: url)
+            viewModel.navigateTo(url: url, selectingPath: initiallySelectedPath)
         }
         .onChange(of: undoManagerIdentity) { _, _ in
             viewModel.bindUndoManager(undoManager)
@@ -171,6 +177,7 @@ struct FolderBrowserView: View {
             case .grid:
                 FolderBrowserGridView(
                     items: viewModel.items,
+                    starredPaths: starredPaths,
                     selectedItems: $viewModel.selectedItems,
                     onItemMouseDown: handleItemMouseDown,
                     onColumnCountChange: { columnCount in
@@ -186,6 +193,7 @@ struct FolderBrowserView: View {
             case .list:
                 FolderBrowserListView(
                     items: viewModel.items,
+                    starredPaths: starredPaths,
                     selectedItems: $viewModel.selectedItems,
                     onItemMouseDown: handleItemMouseDown,
                     contextMenuBuilder: contextMenuContent,
@@ -198,6 +206,7 @@ struct FolderBrowserView: View {
             case .column:
                 FolderBrowserColumnView(
                     items: viewModel.items,
+                    starredPaths: starredPaths,
                     selectedItems: $viewModel.selectedItems,
                     onItemMouseDown: handleItemMouseDown,
                     onColumnCountChange: { columnCount in
@@ -316,6 +325,28 @@ struct FolderBrowserView: View {
                 duplicateItems(items)
             }) {
                 Label("Duplicate", systemImage: "plus.square.on.square")
+            }
+
+            Divider()
+
+            if items.allSatisfy({ appState.isStarred($0) }) {
+                Button(action: {
+                    removeFromStarred(items)
+                }) {
+                    Label(
+                        items.count == 1 ? "Remove from Starred" : "Remove \(items.count) from Starred",
+                        systemImage: "star.slash"
+                    )
+                }
+            } else {
+                Button(action: {
+                    addToStarred(items)
+                }) {
+                    Label(
+                        items.count == 1 ? "Add to Starred" : "Add \(items.count) to Starred",
+                        systemImage: "star"
+                    )
+                }
             }
 
             Divider()
@@ -632,6 +663,28 @@ struct FolderBrowserView: View {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(item.url.path, forType: .string)
+    }
+
+    private func addToStarred(_ items: [FolderBrowserItem]) {
+        do {
+            try appState.addStarredItems(items)
+        } catch {
+            errorAlert = ErrorAlert(
+                title: "Could Not Save Starred Items",
+                message: "Ventry could not save starred items to \(AppStorageManager.shared.starredItemsStorageURL.path): \(error.localizedDescription)"
+            )
+        }
+    }
+
+    private func removeFromStarred(_ items: [FolderBrowserItem]) {
+        do {
+            try appState.removeStarredItems(items)
+        } catch {
+            errorAlert = ErrorAlert(
+                title: "Could Not Update Starred Items",
+                message: "Ventry could not update \(AppStorageManager.shared.starredItemsStorageURL.path): \(error.localizedDescription)"
+            )
+        }
     }
 }
 

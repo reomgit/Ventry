@@ -2,6 +2,7 @@ import SwiftUI
 
 struct FolderBrowserListView<ContextMenu: View>: View {
     let items: [FolderBrowserItem]
+    let starredPaths: Set<String>
     @Binding var selectedItems: Set<FolderBrowserItem>
     let onItemMouseDown: (FolderBrowserItem, NSEvent) -> Void
     let contextMenuBuilder: ([FolderBrowserItem]) -> ContextMenu
@@ -22,6 +23,7 @@ struct FolderBrowserListView<ContextMenu: View>: View {
                 ForEach(items) { item in
                     ListItemView(
                         item: item,
+                        isStarred: starredPaths.contains(item.url.standardizedFileURL.path),
                         isSelected: selectedItems.contains(item),
                         isDropTargeted: dropTargetItemID == item.id,
                         showSize: showSize,
@@ -105,6 +107,7 @@ struct FolderBrowserListView<ContextMenu: View>: View {
 
 private struct ListItemView: View {
     let item: FolderBrowserItem
+    let isStarred: Bool
     let isSelected: Bool
     let isDropTargeted: Bool
     let showSize: Bool
@@ -115,7 +118,8 @@ private struct ListItemView: View {
             // Icon
             FolderBrowserItemIconView(
                 item: item,
-                size: 18
+                size: 18,
+                showStarBadge: isStarred
             )
             .frame(width: 24, height: 24)
 

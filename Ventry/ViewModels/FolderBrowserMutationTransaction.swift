@@ -33,11 +33,13 @@ final class FolderBrowserMutationTransaction {
         do {
             for step in orderedSteps {
                 try direction.apply(step: step, fileManager: fileManager)
+                direction.syncStarredItems(for: step)
                 completedSteps.append(step)
             }
         } catch {
             for step in completedSteps.reversed() {
                 try? direction.rollback(step: step, fileManager: fileManager)
+                direction.rollbackStarredItems(for: step)
             }
             throw error
         }
@@ -48,6 +50,15 @@ protocol FolderBrowserMutationStep: AnyObject {
     func applyForward(fileManager: FileManager) throws
     func applyUndo(fileManager: FileManager) throws
     func applyRedo(fileManager: FileManager) throws
+    func syncStarredItemsAfterForward()
+    func syncStarredItemsAfterUndo()
+    func syncStarredItemsAfterRedo()
+}
+
+extension FolderBrowserMutationStep {
+    func syncStarredItemsAfterForward() {}
+    func syncStarredItemsAfterUndo() {}
+    func syncStarredItemsAfterRedo() {}
 }
 
 final class FolderBrowserMoveStep: FolderBrowserMutationStep {
@@ -82,11 +93,32 @@ final class FolderBrowserMoveStep: FolderBrowserMutationStep {
             fileManager: fileManager
         )
     }
+
+    func syncStarredItemsAfterForward() {
+        do {
+            try StarredItemsStore.shared.replacePathPrefix(from: sourceURL, to: destinationURL)
+        } catch {
+            print("Failed to update starred items after move: \(error)")
+        }
+    }
+
+    func syncStarredItemsAfterUndo() {
+        do {
+            try StarredItemsStore.shared.replacePathPrefix(from: destinationURL, to: sourceURL)
+        } catch {
+            print("Failed to update starred items after undoing move: \(error)")
+        }
+    }
+
+    func syncStarredItemsAfterRedo() {
+        syncStarredItemsAfterForward()
+    }
 }
 
 final class FolderBrowserTrashStep: FolderBrowserMutationStep {
     private let originalURL: URL
     private var trashedURL: URL?
+    private var removedStarredItems: [RemovedStarredItemRecord] = []
 
     init(originalURL: URL) {
         self.originalURL = originalURL.standardizedFileURL
@@ -111,6 +143,26 @@ final class FolderBrowserTrashStep: FolderBrowserMutationStep {
 
     func applyRedo(fileManager: FileManager) throws {
         trashedURL = try trashItem(at: originalURL, fileManager: fileManager)
+    }
+
+    func syncStarredItemsAfterForward() {
+        do {
+            removedStarredItems = try StarredItemsStore.shared.removeItems(atOrInside: originalURL)
+        } catch {
+            print("Failed to remove starred items after trashing item: \(error)")
+        }
+    }
+
+    func syncStarredItemsAfterUndo() {
+        do {
+            try StarredItemsStore.shared.restore(removedStarredItems)
+        } catch {
+            print("Failed to restore starred items after undoing trash: \(error)")
+        }
+    }
+
+    func syncStarredItemsAfterRedo() {
+        syncStarredItemsAfterForward()
     }
 }
 
@@ -186,6 +238,26 @@ private enum FolderBrowserMutationDirection {
             try step.applyUndo(fileManager: fileManager)
         case .undo:
             try step.applyRedo(fileManager: fileManager)
+        }
+    }
+
+    func syncStarredItems(for step: FolderBrowserMutationStep) {
+        switch self {
+        case .forward:
+            step.syncStarredItemsAfterForward()
+        case .undo:
+            step.syncStarredItemsAfterUndo()
+        case .redo:
+            step.syncStarredItemsAfterRedo()
+        }
+    }
+
+    func rollbackStarredItems(for step: FolderBrowserMutationStep) {
+        switch self {
+        case .forward, .redo:
+            step.syncStarredItemsAfterUndo()
+        case .undo:
+            step.syncStarredItemsAfterRedo()
         }
     }
 }

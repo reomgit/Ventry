@@ -17,6 +17,7 @@ class FolderBrowserViewModel: ObservableObject {
     @Published var sortOrder: SortOrder = .nameAscending
     @Published var showHiddenFiles = false
     private var lastSelectedURL: URL?
+    private var pendingSelectionPath: String?
 
     // Navigation state
     @Published var navigationHistory: [URL] = []
@@ -57,8 +58,9 @@ class FolderBrowserViewModel: ObservableObject {
     }
 
     // MARK: - Navigation Methods
-    func navigateTo(url: URL, addToHistory: Bool = true) {
+    func navigateTo(url: URL, addToHistory: Bool = true, selectingPath: String? = nil) {
         loadTask?.cancel()
+        pendingSelectionPath = selectingPath.map { URL(fileURLWithPath: $0).standardizedFileURL.path }
 
         if addToHistory {
             // Remove any forward history when navigating to a new location
@@ -202,6 +204,7 @@ class FolderBrowserViewModel: ObservableObject {
             }
 
             items = sortItems(newItems)
+            applyPendingSelectionIfNeeded()
             errorMessage = nil
             requiresPermission = false
         } catch {
@@ -286,6 +289,20 @@ class FolderBrowserViewModel: ObservableObject {
 
     private func nameAscending(_ lhs: FolderBrowserItem, _ rhs: FolderBrowserItem) -> Bool {
         lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+    }
+
+    private func applyPendingSelectionIfNeeded() {
+        guard let pendingSelectionPath else { return }
+        defer { self.pendingSelectionPath = nil }
+
+        guard let matchingItem = items.first(where: {
+            $0.url.standardizedFileURL.path == pendingSelectionPath
+        }) else {
+            return
+        }
+
+        selectedItems = [matchingItem]
+        lastSelectedURL = matchingItem.url.standardizedFileURL
     }
 
     func setSortOrder(_ order: SortOrder) {
