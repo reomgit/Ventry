@@ -129,8 +129,8 @@ class QuickLookCoordinator: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDe
 struct QuickLookModifier: ViewModifier {
     let items: [FolderBrowserItem]
     @Binding var selectedItems: Set<FolderBrowserItem>
+    @Binding var isPresented: Bool
     let onArrowNavigation: (ArrowNavigationDirection) -> Void
-    @State private var showPreview = false
 
     private var orderedSelectedURLs: [URL] {
         items
@@ -143,17 +143,16 @@ struct QuickLookModifier: ViewModifier {
             .background(
                 QuickLookPreview(
                     urls: orderedSelectedURLs,
-                    isPresented: $showPreview,
+                    isPresented: $isPresented,
                     onArrowNavigation: onArrowNavigation
                 )
                 .frame(width: 0, height: 0)
                 .opacity(0)
             )
-            .onKeyPress(.space) {
-                if !selectedItems.isEmpty {
-                    showPreview.toggle()
+            .onChange(of: orderedSelectedURLs.isEmpty) { _, isEmpty in
+                if isEmpty {
+                    isPresented = false
                 }
-                return .handled
             }
     }
 }
@@ -162,12 +161,14 @@ extension View {
     func quickLookPreview(
         items: [FolderBrowserItem],
         selectedItems: Binding<Set<FolderBrowserItem>>,
+        isPresented: Binding<Bool>,
         onArrowNavigation: @escaping (ArrowNavigationDirection) -> Void = { _ in }
     ) -> some View {
         modifier(
             QuickLookModifier(
                 items: items,
                 selectedItems: selectedItems,
+                isPresented: isPresented,
                 onArrowNavigation: onArrowNavigation
             )
         )

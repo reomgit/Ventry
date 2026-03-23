@@ -10,6 +10,7 @@ struct FolderBrowserColumnView<ContextMenu: View>: View {
     let onDropOnItem: ([URL], FolderBrowserItem) -> Bool
     let onDropInCurrentDirectory: ([URL]) -> Bool
     let onInternalDragBegan: ([URL]) -> Void
+    let onDragSessionUpdated: (DragSession) -> Void
 
     @State private var dropTargetItemID: UUID?
     @Namespace private var dragContainerNamespace
@@ -40,20 +41,11 @@ struct FolderBrowserColumnView<ContextMenu: View>: View {
                             contextMenuBuilder(itemsForMenu)
                         }
                         .contentShape(Rectangle())
-                        #if compiler(>=5.3) && $NonescapableTypes
                         .draggable(
                             containerItemID: item.url.standardizedFileURL,
                             containerNamespace: dragContainerNamespace
                         )
-                        #else
-                        .onDrag {
-                            let draggedURLs: [URL] = selectedItems.contains(item)
-                                ? selectedItems.map { $0.url.standardizedFileURL }
-                                : [item.url.standardizedFileURL]
-                            onInternalDragBegan(draggedURLs)
-                            return NSItemProvider(object: item.url.standardizedFileURL as NSURL)
-                        }
-                        #endif
+                        .folderBrowserMoveByDefaultDragSource()
                         .dropDestination(for: URL.self) { droppedURLs, _ in
                             guard item.isDirectory else { return false }
                             return onDropOnItem(droppedURLs, item)
@@ -64,11 +56,11 @@ struct FolderBrowserColumnView<ContextMenu: View>: View {
                                 dropTargetItemID = nil
                             }
                         }
+                        .folderBrowserMoveByDefaultDropTarget()
                     }
                 }
                 .padding(compact ? 10 : 14)
             }
-            #if compiler(>=5.3) && $NonescapableTypes
             .dragContainerSelection(
                 Array(selectedItems.map { $0.url.standardizedFileURL }),
                 containerNamespace: dragContainerNamespace
@@ -77,10 +69,11 @@ struct FolderBrowserColumnView<ContextMenu: View>: View {
                 onInternalDragBegan(draggedItemIDs)
                 return draggedItemIDs.map { FolderBrowserDraggedItem(url: $0) }
             }
-            #endif
+            .onDragSessionUpdated(onDragSessionUpdated)
             .dropDestination(for: URL.self) { droppedURLs, _ in
                 return onDropInCurrentDirectory(droppedURLs)
             }
+            .folderBrowserMoveByDefaultDropTarget()
             .onAppear {
                 onColumnCountChange(columnCount)
             }

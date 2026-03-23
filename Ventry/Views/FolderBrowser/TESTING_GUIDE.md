@@ -237,13 +237,48 @@ Before testing, ensure:
 #### Test 5.5: Copy to Clipboard
 **Steps:**
 1. Select file(s)
-2. Right-click → Copy
+2. Press Cmd+C
 3. Open Finder
 4. Cmd+V in another location
 
 **Expected Result:**
 - File(s) copied to pasteboard as URLs
 - Finder can paste successfully
+
+#### Test 5.5b: Cut and Paste Within Ventry
+**Steps:**
+1. Open a source folder in FolderBrowserView
+2. Select file(s)
+3. Press Cmd+X
+4. Navigate to a different destination folder in Ventry
+5. Press Cmd+V
+
+**Expected Result:**
+- File(s) move into the destination folder
+- Clipboard cut state clears after a successful move
+- Source items no longer appear in the original folder after refresh
+
+#### Test 5.5c: Copy and Paste Within Ventry
+**Steps:**
+1. Select file(s)
+2. Press Cmd+C
+3. Navigate to a different destination folder in Ventry
+4. Press Cmd+V
+
+**Expected Result:**
+- File(s) are copied into the destination folder
+- Original items remain in place
+- Naming conflicts resolve with unique copy names
+
+#### Test 5.5d: Paste From Finder Into Ventry
+**Steps:**
+1. Copy a file in Finder with Cmd+C
+2. Switch back to Ventry with a FolderBrowserView open
+3. Press Cmd+V
+
+**Expected Result:**
+- Ventry imports the pasted file into the current directory as a copy
+- Paste remains disabled when the clipboard does not contain file URLs
 
 #### Test 5.6: Reveal in Finder
 **Steps:**
@@ -415,6 +450,25 @@ Menu contains:
 **Expected Result:**
 - All 10 files selected
 
+#### Test 8.3b: Cmd+Shift+A
+**Steps:**
+1. Select multiple files
+2. Press Cmd+Shift+A
+
+**Expected Result:**
+- All selected items are cleared
+
+#### Test 8.3c: Focus Isolation
+**Steps:**
+1. Open a FolderBrowserView and select files
+2. Click into the sidebar or the Rename alert text field
+3. Press Cmd+C, Cmd+V, Cmd+A, and Space as applicable
+
+**Expected Result:**
+- Browser shortcuts do not interfere with sidebar interactions
+- Text inputs keep normal copy, paste, and select-all behavior
+- Quick Look does not trigger while text input is active
+
 #### Test 8.4: Undo/Redo Shortcuts
 **Steps:**
 1. Perform a rename, duplicate, or delete
@@ -425,6 +479,33 @@ Menu contains:
 - Undo executes for supported file mutation actions
 - Redo restores the undone action
 - No custom shortcut conflicts with existing navigation keys
+
+#### Test 8.5: Browser Command Shortcuts
+**Steps:**
+1. Select a file
+2. Press Cmd+O, Cmd+R, Cmd+D, Cmd+I, and Cmd+Shift+R in separate passes
+3. Select multiple files and press Delete, then Cmd+Delete in separate passes
+
+**Expected Result:**
+- Cmd+O opens the selected item
+- Cmd+R opens the rename prompt only for a single selection
+- Cmd+D duplicates the selected items
+- Cmd+I opens Finder info
+- Cmd+Shift+R reveals the selected items in Finder
+- Delete and Cmd+Delete both trigger the trash confirmation flow
+
+#### Test 8.6: Navigation and View Mode Shortcuts
+**Steps:**
+1. Navigate through multiple directories
+2. Press Cmd+[ and Cmd+]
+3. Press Cmd+UpArrow
+4. Press Cmd+1, Cmd+2, and Cmd+3
+
+**Expected Result:**
+- Back and forward respect history bounds
+- Cmd+UpArrow navigates to the parent directory when available
+- View mode shortcuts switch between Grid, List, and Column views
+- The selected view mode stays persisted after relaunch
 
 ### 9. Error Handling
 

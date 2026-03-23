@@ -30,12 +30,66 @@ class FolderBrowserViewModel: ObservableObject {
         return navigationHistory[currentHistoryIndex]
     }
 
+    var orderedSelectedItems: [FolderBrowserItem] {
+        items.filter { selectedItems.contains($0) }
+    }
+
     var canNavigateBack: Bool {
         currentHistoryIndex > 0
     }
 
     var canNavigateForward: Bool {
         currentHistoryIndex < navigationHistory.count - 1
+    }
+
+    var canNavigateUp: Bool {
+        guard let currentDirectory else { return false }
+        let parent = currentDirectory.deletingLastPathComponent()
+        return parent.path != currentDirectory.path
+    }
+
+    var canCopySelection: Bool {
+        !orderedSelectedItems.isEmpty
+    }
+
+    var canCutSelection: Bool {
+        canCopySelection
+    }
+
+    var canDuplicateSelection: Bool {
+        canCopySelection
+    }
+
+    var canTrashSelection: Bool {
+        canCopySelection
+    }
+
+    var canRenameSelection: Bool {
+        orderedSelectedItems.count == 1
+    }
+
+    var canOpenSelection: Bool {
+        orderedSelectedItems.count == 1
+    }
+
+    var canQuickLookSelection: Bool {
+        !orderedSelectedItems.isEmpty && orderedSelectedItems.allSatisfy { !$0.isDirectory }
+    }
+
+    var canShowInfoSelection: Bool {
+        !orderedSelectedItems.isEmpty
+    }
+
+    var canRevealSelection: Bool {
+        !orderedSelectedItems.isEmpty
+    }
+
+    var canSelectAll: Bool {
+        !items.isEmpty && selectedItems.count < items.count
+    }
+
+    var canDeselectAll: Bool {
+        !selectedItems.isEmpty
     }
 
     // MARK: - Private Properties
@@ -387,6 +441,12 @@ class FolderBrowserViewModel: ObservableObject {
         NSWorkspace.shared.activateFileViewerSelecting([item.url])
     }
 
+    func revealItemsInFinder(_ items: [FolderBrowserItem]) {
+        let urls = items.map { $0.url.standardizedFileURL }
+        guard !urls.isEmpty else { return }
+        NSWorkspace.shared.activateFileViewerSelecting(urls)
+    }
+
     func openFile(item: FolderBrowserItem) {
         if item.isDirectory {
             navigateTo(url: item.url)
@@ -395,11 +455,93 @@ class FolderBrowserViewModel: ObservableObject {
         }
     }
 
+    func openSelectedItem() {
+        guard canOpenSelection, let item = orderedSelectedItems.first else { return }
+        openFile(item: item)
+    }
+
+    func copySelectedItems() {
+        copySelectedItems(using: FolderBrowserClipboardController.shared)
+    }
+
+    func copySelectedItems(using clipboardController: FolderBrowserClipboardController) {
+        let urls = orderedSelectedItems.map { $0.url.standardizedFileURL }
+        guard !urls.isEmpty else { return }
+        clipboardController.write(urls: urls, operation: .copy)
+    }
+
+    func cutSelectedItems() {
+        cutSelectedItems(using: FolderBrowserClipboardController.shared)
+    }
+
+    func cutSelectedItems(using clipboardController: FolderBrowserClipboardController) {
+        let urls = orderedSelectedItems.map { $0.url.standardizedFileURL }
+        guard !urls.isEmpty else { return }
+        clipboardController.write(urls: urls, operation: .cut)
+    }
+
+    func canPasteItems() -> Bool {
+        canPasteItems(using: FolderBrowserClipboardController.shared)
+    }
+
+    func canPasteItems(using clipboardController: FolderBrowserClipboardController) -> Bool {
+        currentDirectory != nil && clipboardController.hasPasteableFileURLs
+    }
+
+    func pasteItems() async throws -> Bool {
+        try await pasteItems(using: FolderBrowserClipboardController.shared)
+    }
+
+    func pasteItems(using clipboardController: FolderBrowserClipboardController) async throws -> Bool {
+        guard let destinationDirectory = currentDirectory else { return false }
+        guard let request = clipboardController.currentPasteRequest() else { return false }
+
+        let didMutate = try await importDroppedItems(
+            request.urls,
+            to: destinationDirectory,
+            preferMove: request.preferMove
+        )
+        clipboardController.finalizePaste(request, didMutate: didMutate)
+        return didMutate
+    }
+
     func deleteItems(_ items: [FolderBrowserItem]) async throws {
         let validItems = items.map { $0.url.standardizedFileURL }
         guard !validItems.isEmpty else { return }
 
         let steps = validItems.map { FolderBrowserTrashStep(originalURL: $0) }
+        let transaction = FolderBrowserMutationTransaction(
+            actionName: "Move to Trash",
+            steps: steps
+        )
+
+        try await performForwardTransaction(transaction, clearSelection: true)
+    }
+
+    func trashItems(at urls: [URL]) async throws {
+        let validURLs = deduplicatedURLsPreservingOrder(urls.map { $0.standardizedFileURL })
+        guard !validURLs.isEmpty else { return }
+
+        let steps = validURLs.map { FolderBrowserTrashStep(originalURL: $0) }
+        let transaction = FolderBrowserMutationTransaction(
+            actionName: "Move to Trash",
+            steps: steps
+        )
+
+        try await performForwardTransaction(transaction, clearSelection: true)
+    }
+
+    func finalizeExternalMove(for urls: [URL]) async throws {
+        let uniqueURLs = deduplicatedURLsPreservingOrder(urls.map { $0.standardizedFileURL })
+        guard !uniqueURLs.isEmpty else { return }
+
+        let existingURLs = uniqueURLs.filter { fileManager.fileExists(atPath: $0.path) }
+        guard !existingURLs.isEmpty else {
+            await refreshAfterMutation(clearSelection: true)
+            return
+        }
+
+        let steps = existingURLs.map { FolderBrowserTrashStep(originalURL: $0) }
         let transaction = FolderBrowserMutationTransaction(
             actionName: "Move to Trash",
             steps: steps
@@ -458,8 +600,8 @@ class FolderBrowserViewModel: ObservableObject {
         _ droppedURLs: [URL],
         to destinationDirectory: URL,
         preferMove: Bool
-    ) async throws {
-        guard !droppedURLs.isEmpty else { return }
+    ) async throws -> Bool {
+        guard !droppedURLs.isEmpty else { return false }
 
         var isDirectory: ObjCBool = false
         guard fileManager.fileExists(atPath: destinationDirectory.path, isDirectory: &isDirectory),
@@ -486,12 +628,13 @@ class FolderBrowserViewModel: ObservableObject {
             }
         }
 
-        guard !steps.isEmpty else { return }
+        guard !steps.isEmpty else { return false }
         let transaction = FolderBrowserMutationTransaction(
             actionName: preferMove ? "Move" : "Copy",
             steps: steps
         )
         try await performForwardTransaction(transaction, clearSelection: false)
+        return true
     }
 
     private func performForwardTransaction(
@@ -584,6 +727,30 @@ class FolderBrowserViewModel: ObservableObject {
 
     func openPrivacySettings() {
         permissionManager.openDocumentsPrivacySettings()
+    }
+
+    func showInfo(for items: [FolderBrowserItem]) {
+        items.forEach { item in
+            let posixPath = item.url.path
+            let script = """
+            tell application "Finder"
+                activate
+                set itemPath to POSIX file "\(posixPath)"
+                open information window of itemPath
+            end tell
+            """
+
+            var error: NSDictionary?
+            if let scriptObject = NSAppleScript(source: script) {
+                scriptObject.executeAndReturnError(&error)
+                if let error {
+                    print("AppleScript error: \(error)")
+                    NSWorkspace.shared.activateFileViewerSelecting([item.url])
+                }
+            } else {
+                NSWorkspace.shared.activateFileViewerSelecting([item.url])
+            }
+        }
     }
 
     // MARK: - Breadcrumb Management

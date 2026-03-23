@@ -16,21 +16,24 @@ struct VentryApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(appState)
-            .frame(minWidth: 800, minHeight: 600)
-            .onAppear {
-                _ = AppStorageManager.shared.prepareDirectories()
-                PermissionManager.shared.refreshPermissionState()
-            }
-            .onChange(of: scenePhase) { _, newPhase in
-                guard newPhase == .active else { return }
-
-                PermissionManager.shared.refreshPermissionState()
-
-                Task {
-                    await appState.revalidatePaths()
+                .frame(minWidth: 800, minHeight: 600)
+                .onAppear {
+                    _ = AppStorageManager.shared.prepareDirectories()
+                    PermissionManager.shared.refreshPermissionState()
                 }
-            }
+                .onChange(of: scenePhase) { _, newPhase in
+                    guard newPhase == .active else { return }
+
+                    PermissionManager.shared.refreshPermissionState()
+
+                    Task {
+                        await appState.revalidatePaths()
+                    }
+                }
         }
         .windowStyle(DefaultWindowStyle())
+        .commands {
+            FolderBrowserCommands()
+        }
     }
 }

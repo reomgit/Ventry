@@ -20,6 +20,7 @@ struct ApplicationDirectoryView: View {
                     FolderBrowserView(
                         title: "\(application.name) • \(selectedDirectory.name)",
                         path: selectedDirectory.path,
+                        sourceApplicationId: application.id,
                         parentPageTitle: application.name,
                         onReturnToParentPage: {
                             self.selectedDirectory = nil
