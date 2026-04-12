@@ -21,10 +21,15 @@ struct ContentView: View {
                         max: max(250, min(300, geometry.size.width * 0.35))
                     )
             } detail: {
-                Text("Choose a collection or shortcut")
-                    .foregroundColor(.secondary)
-                    .font(.title2)
+                VStack(spacing: 0) {
+                    BrowserTabStripView(workspace: appState.browserWorkspace)
+
+                    Divider()
+
+                    detailView
+                }
             }
+            .focusedSceneValue(\.browserTabCommandHandler, browserTabCommandHandler)
             .navigationSplitViewStyle(.balanced)
         }
         .sheet(isPresented: $appState.showingMultipleInstallationsSheet) {
@@ -39,6 +44,42 @@ struct ContentView: View {
         }
         .sheet(isPresented: $permissionManager.needsPathRevalidation) {
             PathValidationView()
+        }
+    }
+
+    private var browserTabCommandHandler: BrowserTabCommandHandler {
+        BrowserTabCommandHandler(
+            canCreateNewTab: { true },
+            canCloseActiveTab: { appState.browserWorkspace.hasTabs },
+            canSelectPreviousTab: { appState.browserWorkspace.canSelectPreviousTab },
+            canSelectNextTab: { appState.browserWorkspace.canSelectNextTab },
+            createNewTab: { appState.createEmptyBrowserTab() },
+            closeActiveTab: { appState.closeActiveBrowserTab() },
+            selectPreviousTab: { appState.selectPreviousBrowserTab() },
+            selectNextTab: { appState.selectNextBrowserTab() }
+        )
+    }
+
+    @ViewBuilder
+    private var detailView: some View {
+        switch appState.detailMode {
+        case .placeholder:
+            DetailPlaceholderView()
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    appState.selectedSidebarItem = nil
+                }
+
+        case .browserWorkspace:
+            BrowserWorkspaceView(workspace: appState.browserWorkspace)
+
+        case let .applicationDirectories(applicationId):
+            ApplicationDirectoryView(applicationId: applicationId) { directory, application in
+                appState.openApplicationDirectory(directory, in: application)
+            }
+
+        case .applicationSettings:
+            ApplicationSettingsView()
         }
     }
 }

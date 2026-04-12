@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 
+@MainActor
 class AppState: ObservableObject {
     @Published var collections: [Collection] = []
     @Published var starredItems: [StarredItem] = []
@@ -15,10 +16,13 @@ class AppState: ObservableObject {
     @Published var loadedApps: [AppLoader.LoadedApp] = []
     @Published var isLoadingApps = false
     @Published var hasAccess = false
+    @Published var detailMode: DetailMode = .placeholder
+    @Published var selectedSidebarItem: SidebarSelection?
 
     private let applicationManager = ApplicationManager()
     private let starredItemsStore = StarredItemsStore.shared
     private var cancellables = Set<AnyCancellable>()
+    let browserWorkspace = BrowserWorkspace()
 
     // Provide access to applicationManager for views that need it
     var applicationManagerAccess: ApplicationManager {
@@ -37,6 +41,163 @@ class AppState: ObservableObject {
             await loadSavedStarredItems()
             await validateAllPaths()
         }
+    }
+
+    func openRegularFolder(_ folder: RegularFolder) {
+        selectedSidebarItem = .regularFolder(folder)
+        folder.ensureDirectoryExists()
+
+        openBrowserRoute(
+            BrowserRoute(
+                title: folder.rawValue,
+                path: folder.navigationPath
+            )
+        )
+    }
+
+    func openRegularFolderInNewTab(_ folder: RegularFolder) {
+        folder.ensureDirectoryExists()
+        openBrowserRouteInNewTab(
+            BrowserRoute(
+                title: folder.rawValue,
+                path: folder.navigationPath
+            )
+        )
+    }
+
+    func openCollection(_ collection: Collection) {
+        selectedSidebarItem = .collection(collection.id)
+        openBrowserRoute(
+            BrowserRoute(
+                title: collection.name,
+                path: collection.path
+            )
+        )
+    }
+
+    func openCollectionInNewTab(_ collection: Collection) {
+        openBrowserRouteInNewTab(
+            BrowserRoute(
+                title: collection.name,
+                path: collection.path
+            )
+        )
+    }
+
+    func openStarredItem(_ item: StarredItem) {
+        selectedSidebarItem = .starred(item.id)
+
+        guard let route = browserRoute(for: item) else {
+            detailMode = .placeholder
+            return
+        }
+
+        openBrowserRoute(route)
+    }
+
+    func openStarredItemInNewTab(_ item: StarredItem) {
+        guard let route = browserRoute(for: item) else {
+            return
+        }
+
+        openBrowserRouteInNewTab(route)
+    }
+
+    func showApplicationDirectories(_ application: Application) {
+        selectedSidebarItem = .application(application.id)
+        detailMode = .applicationDirectories(application.id)
+    }
+
+    func showApplicationSettings() {
+        selectedSidebarItem = .applicationSettings
+        detailMode = .applicationSettings
+    }
+
+    func openApplicationDirectory(_ directory: AppDirectory, in application: Application) {
+        selectedSidebarItem = .application(application.id)
+        openBrowserRoute(
+            BrowserRoute(
+                title: "\(application.name) • \(directory.name)",
+                path: directory.path,
+                sourceApplicationId: application.id,
+                parentPageTitle: application.name,
+                parentDetailTarget: .applicationDirectories(application.id)
+            )
+        )
+    }
+
+    func createEmptyBrowserTab() {
+        selectedSidebarItem = nil
+        detailMode = .browserWorkspace
+        browserWorkspace.createEmptyTab()
+    }
+
+    func openBrowserRouteInNewTab(_ route: BrowserRoute) {
+        selectedSidebarItem = nil
+        detailMode = .browserWorkspace
+        browserWorkspace.createTab(with: route)
+    }
+
+    func selectBrowserTab(_ id: UUID) {
+        selectedSidebarItem = nil
+        detailMode = .browserWorkspace
+        browserWorkspace.selectTab(id: id)
+    }
+
+    func selectPreviousBrowserTab() {
+        guard browserWorkspace.canSelectPreviousTab else { return }
+        selectedSidebarItem = nil
+        detailMode = .browserWorkspace
+        browserWorkspace.selectPreviousTab()
+    }
+
+    func selectNextBrowserTab() {
+        guard browserWorkspace.canSelectNextTab else { return }
+        selectedSidebarItem = nil
+        detailMode = .browserWorkspace
+        browserWorkspace.selectNextTab()
+    }
+
+    func closeBrowserTab(_ id: UUID) {
+        if browserWorkspace.closeTab(id: id) {
+            detailMode = .browserWorkspace
+        } else {
+            detailMode = .placeholder
+            selectedSidebarItem = nil
+        }
+    }
+
+    func closeActiveBrowserTab() {
+        if browserWorkspace.closeActiveTab() {
+            detailMode = .browserWorkspace
+        } else {
+            detailMode = .placeholder
+            selectedSidebarItem = nil
+        }
+    }
+
+    private func openBrowserRoute(_ route: BrowserRoute) {
+        detailMode = .browserWorkspace
+        browserWorkspace.open(route)
+    }
+
+    private func browserRoute(for item: StarredItem) -> BrowserRoute? {
+        guard let path = item.path, !path.isEmpty else { return nil }
+
+        let itemURL = URL(fileURLWithPath: path)
+        let pathToBrowse = item.type == .folder
+            ? itemURL.path
+            : itemURL.deletingLastPathComponent().path
+        let selectionPath = item.type == .file ? itemURL.path : nil
+        let title = item.type == .folder
+            ? item.name
+            : itemURL.deletingLastPathComponent().lastPathComponent
+
+        return BrowserRoute(
+            title: title,
+            path: pathToBrowse,
+            initiallySelectedPath: selectionPath
+        )
     }
 
     /// Loads all .app files from /Applications folder (runs on app launch)

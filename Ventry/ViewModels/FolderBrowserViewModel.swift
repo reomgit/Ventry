@@ -129,6 +129,32 @@ class FolderBrowserViewModel: ObservableObject {
         loadDirectory(at: url)
     }
 
+    func resetNavigation(to url: URL, selectingPath: String? = nil) {
+        loadTask?.cancel()
+        lastSelectedURL = nil
+        selectedItems.removeAll()
+        navigationHistory = [url]
+        currentHistoryIndex = 0
+        pendingSelectionPath = selectingPath.map { URL(fileURLWithPath: $0).standardizedFileURL.path }
+        loadDirectory(at: url)
+    }
+
+    func resetState() {
+        loadTask?.cancel()
+        items = []
+        selectedItems.removeAll()
+        errorMessage = nil
+        operationErrorMessage = nil
+        requiresPermission = false
+        isBlockedByDocumentsPrivacy = false
+        pendingPermissionPath = nil
+        isLoading = false
+        navigationHistory = []
+        currentHistoryIndex = -1
+        lastSelectedURL = nil
+        pendingSelectionPath = nil
+    }
+
     func navigateBack() {
         guard canNavigateBack else { return }
         currentHistoryIndex -= 1

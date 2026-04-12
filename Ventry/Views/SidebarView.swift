@@ -17,10 +17,18 @@ struct SidebarView: View {
                         .italic()
                 } else {
                     ForEach(appState.starredItems) { item in
-                        NavigationLink(destination: StarredItemDestinationView(item: item)) {
+                        sidebarRowButton(selection: .starred(item.id)) {
+                            appState.openStarredItem(item)
+                        } label: {
                             StarredItemRowView(item: item)
                         }
                         .contextMenu {
+                            Button("Open in New Tab") {
+                                appState.openStarredItemInNewTab(item)
+                            }
+
+                            Divider()
+
                             Button("Reveal in Finder") {
                                 revealStarredItemInFinder(item)
                             }
@@ -45,10 +53,15 @@ struct SidebarView: View {
                         .italic()
                 } else {
                     ForEach(appState.regularFolders, id: \.self) { folder in
-                        NavigationLink(
-                            destination: FileBrowserView(title: folder.rawValue, path: folder.navigationPath)
-                        ) {
+                        sidebarRowButton(selection: .regularFolder(folder)) {
+                            appState.openRegularFolder(folder)
+                        } label: {
                             RegularFolderRowView(folder: folder)
+                        }
+                        .contextMenu {
+                            Button("Open in New Tab") {
+                                appState.openRegularFolderInNewTab(folder)
+                            }
                         }
                     }
                     
@@ -57,24 +70,28 @@ struct SidebarView: View {
                     }
                     
                     ForEach(appState.collections) { collection in
-                        NavigationLink(destination: FolderBrowserView(
-                            title: collection.name,
-                            path: collection.path
-                        )) {
+                        sidebarRowButton(selection: .collection(collection.id)) {
+                            appState.openCollection(collection)
+                        } label: {
                             CollectionRowView(collection: collection)
-                                .contextMenu {
-                                    Button("Refresh Collection") {
-                                        Task {
-                                            await appState.refreshCollection(collection)
-                                        }
-                                    }
-                                    Divider()
-                                    Button("Remove Collection", role: .destructive) {
-                                        appState.removeCollection(withId: collection.id)
-                                    }
-                                }
                         }
-                        .contentShape(Rectangle())
+                        .contextMenu {
+                            Button("Open in New Tab") {
+                                appState.openCollectionInNewTab(collection)
+                            }
+
+                            Divider()
+
+                            Button("Refresh Collection") {
+                                Task {
+                                    await appState.refreshCollection(collection)
+                                }
+                            }
+                            Divider()
+                            Button("Remove Collection", role: .destructive) {
+                                appState.removeCollection(withId: collection.id)
+                            }
+                        }
                     }
                 }
             }
@@ -88,7 +105,9 @@ struct SidebarView: View {
                             .foregroundColor(.secondary)
                             .italic()
                         
-                        NavigationLink(destination: ApplicationSettingsView()) {
+                        Button {
+                            appState.showApplicationSettings()
+                        } label: {
                             HStack {
                                 Image(systemName: "plus")
                                 Text("Scan for Apps")
@@ -96,11 +115,14 @@ struct SidebarView: View {
                             .font(.caption)
                             .foregroundColor(.accentColor)
                         }
+                        .buttonStyle(.plain)
                         .padding(.top, 4)
                     }
                 } else {
                     ForEach(appState.applications) { application in
-                        NavigationLink(destination: ApplicationDirectoryView(applicationId: application.id)) {
+                        sidebarRowButton(selection: .application(application.id)) {
+                            appState.showApplicationDirectories(application)
+                        } label: {
                             ApplicationRowView(application: application)
                         }
                         .contextMenu {
@@ -111,7 +133,9 @@ struct SidebarView: View {
                         }
                     }
                     
-                    NavigationLink(destination: ApplicationSettingsView()) {
+                    sidebarRowButton(selection: .applicationSettings) {
+                        appState.showApplicationSettings()
+                    } label: {
                         HStack {
                             Image(systemName: "gearshape")
                                 .foregroundColor(.secondary)
@@ -162,6 +186,28 @@ struct SidebarView: View {
         } message: { app in
             Text("This will remove \(app.name) from Ventry and delete all \(app.directories.count) path entr\(app.directories.count == 1 ? "y" : "ies") assigned to it.")
         }
+    }
+
+    private func isSelected(_ selection: SidebarSelection) -> Bool {
+        appState.selectedSidebarItem == selection
+    }
+
+    private func sidebarRowButton<Label: View>(
+        selection: SidebarSelection,
+        action: @escaping () -> Void,
+        @ViewBuilder label: () -> Label
+    ) -> some View {
+        Button(action: action) {
+            label()
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(isSelected(selection) ? Color.accentColor.opacity(0.16) : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
     }
 
     private func revealStarredItemInFinder(_ item: StarredItem) {

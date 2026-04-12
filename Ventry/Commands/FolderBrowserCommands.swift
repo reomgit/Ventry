@@ -150,6 +150,59 @@ extension FocusedValues {
     }
 }
 
+@MainActor
+final class BrowserTabCommandHandler {
+    private let canCreateNewTabProvider: () -> Bool
+    private let canCloseActiveTabProvider: () -> Bool
+    private let canSelectPreviousTabProvider: () -> Bool
+    private let canSelectNextTabProvider: () -> Bool
+    private let createNewTabAction: () -> Void
+    private let closeActiveTabAction: () -> Void
+    private let selectPreviousTabAction: () -> Void
+    private let selectNextTabAction: () -> Void
+
+    init(
+        canCreateNewTab: @escaping () -> Bool,
+        canCloseActiveTab: @escaping () -> Bool,
+        canSelectPreviousTab: @escaping () -> Bool,
+        canSelectNextTab: @escaping () -> Bool,
+        createNewTab: @escaping () -> Void,
+        closeActiveTab: @escaping () -> Void,
+        selectPreviousTab: @escaping () -> Void,
+        selectNextTab: @escaping () -> Void
+    ) {
+        self.canCreateNewTabProvider = canCreateNewTab
+        self.canCloseActiveTabProvider = canCloseActiveTab
+        self.canSelectPreviousTabProvider = canSelectPreviousTab
+        self.canSelectNextTabProvider = canSelectNextTab
+        self.createNewTabAction = createNewTab
+        self.closeActiveTabAction = closeActiveTab
+        self.selectPreviousTabAction = selectPreviousTab
+        self.selectNextTabAction = selectNextTab
+    }
+
+    var canCreateNewTab: Bool { canCreateNewTabProvider() }
+    var canCloseActiveTab: Bool { canCloseActiveTabProvider() }
+    var canSelectPreviousTab: Bool { canSelectPreviousTabProvider() }
+    var canSelectNextTab: Bool { canSelectNextTabProvider() }
+
+    func createNewTab() { createNewTabAction() }
+    func closeActiveTab() { closeActiveTabAction() }
+    func selectPreviousTab() { selectPreviousTabAction() }
+    func selectNextTab() { selectNextTabAction() }
+}
+
+private struct BrowserTabCommandHandlerKey: FocusedValueKey {
+    typealias Value = BrowserTabCommandHandler
+}
+
+extension FocusedValues {
+    var browserTabCommandHandler: BrowserTabCommandHandler? {
+        get { self[BrowserTabCommandHandlerKey.self] }
+        set { self[BrowserTabCommandHandlerKey.self] = newValue }
+    }
+}
+
 enum FolderBrowserCommandSupport {
     static var isTextInputActive: Bool {
         NSApp.keyWindow?.firstResponder is NSTextView
@@ -166,6 +219,7 @@ enum FolderBrowserCommandSupport {
 
 struct FolderBrowserCommands: Commands {
     @FocusedValue(\.folderBrowserCommandHandler) private var folderBrowserCommandHandler
+    @FocusedValue(\.browserTabCommandHandler) private var browserTabCommandHandler
 
     private var activeBrowserCommandHandler: FolderBrowserCommandHandler? {
         guard !FolderBrowserCommandSupport.isTextInputActive else { return nil }
@@ -233,6 +287,14 @@ struct FolderBrowserCommands: Commands {
             }
             .keyboardShortcut("a", modifiers: [.command, .shift])
             .disabled(activeBrowserCommandHandler?.canDeselectAll != true)
+        }
+
+        CommandGroup(after: .newItem) {
+            Button("New Tab") {
+                browserTabCommandHandler?.createNewTab()
+            }
+            .keyboardShortcut("t", modifiers: [.command])
+            .disabled(browserTabCommandHandler?.canCreateNewTab != true)
         }
 
         CommandMenu("Browser") {
@@ -304,6 +366,33 @@ struct FolderBrowserCommands: Commands {
             viewModeButton(title: "Grid View", mode: .grid, shortcut: "1")
             viewModeButton(title: "List View", mode: .list, shortcut: "2")
             viewModeButton(title: "Column View", mode: .column, shortcut: "3")
+        }
+
+        CommandMenu("Tabs") {
+            Button("New Tab") {
+                browserTabCommandHandler?.createNewTab()
+            }
+            .keyboardShortcut("t", modifiers: [.command])
+            .disabled(browserTabCommandHandler?.canCreateNewTab != true)
+
+            Button("Close Tab") {
+                browserTabCommandHandler?.closeActiveTab()
+            }
+            .disabled(browserTabCommandHandler?.canCloseActiveTab != true)
+
+            Divider()
+
+            Button("Previous Tab") {
+                browserTabCommandHandler?.selectPreviousTab()
+            }
+            .keyboardShortcut("[", modifiers: [.command, .shift])
+            .disabled(browserTabCommandHandler?.canSelectPreviousTab != true)
+
+            Button("Next Tab") {
+                browserTabCommandHandler?.selectNextTab()
+            }
+            .keyboardShortcut("]", modifiers: [.command, .shift])
+            .disabled(browserTabCommandHandler?.canSelectNextTab != true)
         }
     }
 

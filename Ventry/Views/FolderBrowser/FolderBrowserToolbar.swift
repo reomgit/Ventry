@@ -55,7 +55,6 @@ struct FolderBrowserToolbar: View {
                     ForEach(SortOrder.allCases, id: \.self) { order in
                         Button(action: {
                             sortOrder = order
-                            viewModel.setSortOrder(order)
                         }) {
                             HStack {
                                 Text(order.rawValue)

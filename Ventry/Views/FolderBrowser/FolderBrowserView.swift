@@ -2,19 +2,90 @@ import SwiftUI
 import Quartz
 
 struct FolderBrowserView: View {
-    let title: String
-    let path: String
-    var initiallySelectedPath: String? = nil
-    var sourceApplicationId: UUID? = nil
-    var parentPageTitle: String? = nil
-    var onReturnToParentPage: (() -> Void)? = nil
+    private let ownedRoute: BrowserRoute?
+    private let externalSession: FolderBrowserSession?
+    private let onReturnToParentPage: (() -> Void)?
+
+    init(
+        title: String,
+        path: String,
+        initiallySelectedPath: String? = nil,
+        sourceApplicationId: UUID? = nil,
+        parentPageTitle: String? = nil,
+        onReturnToParentPage: (() -> Void)? = nil
+    ) {
+        ownedRoute = BrowserRoute(
+            title: title,
+            path: path,
+            initiallySelectedPath: initiallySelectedPath,
+            sourceApplicationId: sourceApplicationId,
+            parentPageTitle: parentPageTitle
+        )
+        externalSession = nil
+        self.onReturnToParentPage = onReturnToParentPage
+    }
+
+    init(session: FolderBrowserSession, onReturnToParentPage: (() -> Void)? = nil) {
+        ownedRoute = nil
+        externalSession = session
+        self.onReturnToParentPage = onReturnToParentPage
+    }
+
+    var body: some View {
+        Group {
+            if let externalSession {
+                SessionFolderBrowserContainer(
+                    session: externalSession,
+                    onReturnToParentPage: onReturnToParentPage
+                )
+            } else if let ownedRoute {
+                OwnedFolderBrowserContainer(
+                    initialRoute: ownedRoute,
+                    onReturnToParentPage: onReturnToParentPage
+                )
+            }
+        }
+    }
+}
+
+private struct OwnedFolderBrowserContainer: View {
+    @StateObject private var session: FolderBrowserSession
+    let onReturnToParentPage: (() -> Void)?
+
+    init(initialRoute: BrowserRoute, onReturnToParentPage: (() -> Void)? = nil) {
+        _session = StateObject(wrappedValue: FolderBrowserSession(route: initialRoute))
+        self.onReturnToParentPage = onReturnToParentPage
+    }
+
+    var body: some View {
+        FolderBrowserContentView(
+            session: session,
+            onReturnToParentPage: onReturnToParentPage
+        )
+    }
+}
+
+private struct SessionFolderBrowserContainer: View {
+    @ObservedObject var session: FolderBrowserSession
+    let onReturnToParentPage: (() -> Void)?
+
+    var body: some View {
+        FolderBrowserContentView(
+            session: session,
+            onReturnToParentPage: onReturnToParentPage
+        )
+    }
+}
+
+private struct FolderBrowserContentView: View {
+    @ObservedObject var session: FolderBrowserSession
+    let onReturnToParentPage: (() -> Void)?
 
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) private var dismiss
     @Environment(\.undoManager) private var undoManager
-    @StateObject private var viewModel = FolderBrowserViewModel()
+    @ObservedObject private var viewModel: FolderBrowserViewModel
     @AppStorage("folderBrowserViewMode") private var viewMode: BrowserViewMode = .grid
-    @State private var sortOrder: SortOrder = .nameAscending
     @State private var showingDeleteAlert = false
     @State private var itemsToDelete: [FolderBrowserItem] = []
     @State private var showingRenameAlert = false
@@ -31,6 +102,12 @@ struct FolderBrowserView: View {
     @State private var isQuickLookPresented = false
     @FocusState private var isCommandTargetFocused: Bool
 
+    init(session: FolderBrowserSession, onReturnToParentPage: (() -> Void)? = nil) {
+        self.session = session
+        self.onReturnToParentPage = onReturnToParentPage
+        _viewModel = ObservedObject(wrappedValue: session.viewModel)
+    }
+
     private var undoManagerIdentity: ObjectIdentifier? {
         undoManager.map(ObjectIdentifier.init)
     }
@@ -40,8 +117,15 @@ struct FolderBrowserView: View {
     }
 
     private var sourceApplication: Application? {
-        guard let sourceApplicationId else { return nil }
+        guard let sourceApplicationId = session.route.sourceApplicationId else { return nil }
         return appState.applications.first { $0.id == sourceApplicationId }
+    }
+
+    private var sortOrderBinding: Binding<SortOrder> {
+        Binding(
+            get: { session.sortOrder },
+            set: { session.updateSortOrder($0) }
+        )
     }
 
     private var commandHandler: FolderBrowserCommandHandler {
@@ -87,7 +171,7 @@ struct FolderBrowserView: View {
             FolderBrowserToolbar(
                 viewModel: viewModel,
                 viewMode: $viewMode,
-                sortOrder: $sortOrder
+                sortOrder: sortOrderBinding
             )
 
             Divider()
@@ -166,9 +250,9 @@ struct FolderBrowserView: View {
         .focusable()
         .focused($isCommandTargetFocused)
         .focusedSceneValue(\.folderBrowserCommandHandler, commandHandler)
-        .navigationTitle(parentPageTitle == nil ? title : "")
+        .navigationTitle(session.route.parentPageTitle == nil ? session.route.title : "")
         .toolbar {
-            if parentPageTitle != nil {
+            if session.route.parentPageTitle != nil {
                 ToolbarItem(placement: .navigation) {
                     Button(action: {
                         if let onReturnToParentPage {
@@ -181,17 +265,16 @@ struct FolderBrowserView: View {
                             Image(systemName: "arrow.left")
                                 .font(.headline)
 
-                            Text(parentPageTitle ?? title)
+                            Text(session.route.parentPageTitle ?? session.route.title)
                                 .font(.headline)
                                 .lineLimit(1)
                                 .fixedSize(horizontal: true, vertical: false)
                         }
-                        .frame(minWidth: 220, alignment: .leading)
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                     }
                     .buttonStyle(.plain)
-                    .help("Back to \(parentPageTitle ?? title)")
+                    .help("Back to \(session.route.parentPageTitle ?? session.route.title)")
                 }
             }
         }
@@ -199,18 +282,13 @@ struct FolderBrowserView: View {
             startKeyboardMonitor()
             viewModel.bindUndoManager(undoManager)
             isCommandTargetFocused = true
-            if viewModel.currentDirectory == nil {
-                let url = URL(fileURLWithPath: path)
-                viewModel.navigateTo(url: url, selectingPath: initiallySelectedPath)
+            if !session.isPlaceholder, viewModel.currentDirectory == nil {
+                session.open(session.route)
             }
         }
         .onDisappear {
             stopKeyboardMonitor()
             isQuickLookPresented = false
-        }
-        .onChange(of: path) { _, newPath in
-            let url = URL(fileURLWithPath: newPath)
-            viewModel.navigateTo(url: url, selectingPath: initiallySelectedPath)
         }
         .onChange(of: undoManagerIdentity) { _, _ in
             viewModel.bindUndoManager(undoManager)
@@ -368,6 +446,22 @@ struct FolderBrowserView: View {
                     viewModel.openFile(item: item)
                 }) {
                     Label("Open", systemImage: "arrow.up.forward.app")
+                }
+
+                if item.isDirectory {
+                    Button(action: {
+                        appState.openBrowserRouteInNewTab(
+                            BrowserRoute(
+                                title: item.displayName,
+                                path: item.url.path,
+                                sourceApplicationId: session.route.sourceApplicationId,
+                                parentPageTitle: session.route.parentPageTitle,
+                                parentDetailTarget: session.route.parentDetailTarget
+                            )
+                        )
+                    }) {
+                        Label("Open in New Tab", systemImage: "plus.square.on.square")
+                    }
                 }
 
                 if !item.isDirectory {

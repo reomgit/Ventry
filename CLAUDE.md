@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Codebase Analysis (CRITICAL)
+
+**You MUST use `@.claude/agents/gemini-analyzer.md` for ANY AND EVERY kind of codebase analysis.** Do not analyze manually; delegate to Gemini CLI via the agent. (This include simple project explorations)
+
 ## Project Overview
 
 Ventry is a macOS SwiftUI application that helps designers and creators organize creative assets (fonts, icons, plugins, presets) stored locally. It provides a Finder-like interface for browsing and managing design resources across multiple applications.
