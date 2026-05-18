@@ -8,9 +8,17 @@ struct SupportedPathResolver {
         let exists: Bool
     }
 
-    static func resolveDirectories(for supportedApp: SupportedApplication, appVersion: String?) -> [ResolvedDirectory] {
+    static func resolveDirectories(
+        for supportedApp: SupportedApplication,
+        appVersion: String?,
+        appBundlePath: String? = nil
+    ) -> [ResolvedDirectory] {
         supportedApp.paths.flatMap { supportedPath in
-            resolveDirectory(for: supportedPath, appVersion: appVersion)
+            resolveDirectory(
+                for: supportedPath,
+                appVersion: appVersion,
+                appBundlePath: appBundlePath
+            )
         }
     }
 
@@ -48,8 +56,12 @@ struct SupportedPathResolver {
         }
     }
 
-    private static func resolveDirectory(for supportedPath: SupportedPath, appVersion: String?) -> [ResolvedDirectory] {
-        let expandedTemplate = expandTemplateTokens(in: supportedPath.path)
+    private static func resolveDirectory(
+        for supportedPath: SupportedPath,
+        appVersion: String?,
+        appBundlePath: String?
+    ) -> [ResolvedDirectory] {
+        let expandedTemplate = expandTemplateTokens(in: supportedPath.path, appBundlePath: appBundlePath)
         let directoryType = DirectoryType(rawValue: supportedPath.type) ?? .other
 
         guard expandedTemplate.contains("{version}") else {
@@ -131,15 +143,55 @@ struct SupportedPathResolver {
         return resolvedDirectories
     }
 
-    private static func expandTemplateTokens(in path: String) -> String {
+    private static func expandTemplateTokens(in path: String, appBundlePath: String?) -> String {
         var expandedPath = path.replacingOccurrences(of: "~", with: FileManager.default.homeDirectoryForCurrentUser.path)
 
         if expandedPath.contains("{year}") {
-            let currentYear = Calendar.current.component(.year, from: Date())
-            expandedPath = expandedPath.replacingOccurrences(of: "{year}", with: String(currentYear))
+            let resolvedYear = yearCandidate(from: appBundlePath)
+                ?? String(Calendar.current.component(.year, from: Date()))
+            expandedPath = expandedPath.replacingOccurrences(of: "{year}", with: resolvedYear)
         }
 
         return expandedPath
+    }
+
+    private static func yearCandidate(from appBundlePath: String?) -> String? {
+        guard let appBundlePath, !appBundlePath.isEmpty else {
+            return nil
+        }
+
+        let bundleURL = URL(fileURLWithPath: appBundlePath)
+        let candidates = [
+            bundleURL.deletingPathExtension().lastPathComponent,
+            bundleURL.deletingLastPathComponent().lastPathComponent,
+            bundleURL.lastPathComponent
+        ]
+
+        for candidate in candidates {
+            if let year = extractFourDigitYear(from: candidate) {
+                return year
+            }
+        }
+
+        return nil
+    }
+
+    private static func extractFourDigitYear(from text: String) -> String? {
+        let separators = CharacterSet.alphanumerics.inverted
+        let tokens = text.components(separatedBy: separators).filter { !$0.isEmpty }
+
+        for token in tokens.reversed() {
+            guard token.count == 4,
+                  token.allSatisfy(\.isNumber),
+                  let year = Int(token),
+                  (2000...2099).contains(year) else {
+                continue
+            }
+
+            return token
+        }
+
+        return nil
     }
 
     private static func discoverVersionFolders(at rootPath: String) -> [String] {

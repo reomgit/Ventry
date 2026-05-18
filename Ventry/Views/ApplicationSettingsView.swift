@@ -882,7 +882,8 @@ struct ApplicationScannerView: View {
 
                 let availableDirectories = createAvailableDirectories(
                     from: supportedApp,
-                    appVersion: loadedApp.version
+                    appVersion: loadedApp.version,
+                    appBundlePath: loadedApp.bundlePath
                 )
 
                 if !availableDirectories.isEmpty {
@@ -908,8 +909,16 @@ struct ApplicationScannerView: View {
         appState.applications.contains { $0.installKey == app.installKey }
     }
     
-    private func createAvailableDirectories(from supportedApp: SupportedApplication, appVersion: String?) -> [AvailableDirectory] {
-        SupportedPathResolver.resolveDirectories(for: supportedApp, appVersion: appVersion).map { resolvedDirectory in
+    private func createAvailableDirectories(
+        from supportedApp: SupportedApplication,
+        appVersion: String?,
+        appBundlePath: String
+    ) -> [AvailableDirectory] {
+        SupportedPathResolver.resolveDirectories(
+            for: supportedApp,
+            appVersion: appVersion,
+            appBundlePath: appBundlePath
+        ).map { resolvedDirectory in
             AvailableDirectory(
                 name: resolvedDirectory.name,
                 path: resolvedDirectory.path,
@@ -1257,7 +1266,11 @@ struct ManualMultipleAppSelectionView: View {
             var availableDirectories: [AvailableDirectory] = []
             if !isAlreadyAdded,
                let supportedApp = appState.applicationManagerAccess.getSupportedApplication(for: bundleIdentifier) {
-                availableDirectories = createAvailableDirectories(from: supportedApp, appVersion: metadata.version)
+                availableDirectories = createAvailableDirectories(
+                    from: supportedApp,
+                    appVersion: metadata.version,
+                    appBundlePath: url.path
+                )
             }
 
             let detectedApp = DetectedApplication(
@@ -1293,8 +1306,16 @@ struct ManualMultipleAppSelectionView: View {
         return (bundleIdentifier, version)
     }
 
-    private func createAvailableDirectories(from supportedApp: SupportedApplication, appVersion: String?) -> [AvailableDirectory] {
-        SupportedPathResolver.resolveDirectories(for: supportedApp, appVersion: appVersion).map { resolvedDirectory in
+    private func createAvailableDirectories(
+        from supportedApp: SupportedApplication,
+        appVersion: String?,
+        appBundlePath: String
+    ) -> [AvailableDirectory] {
+        SupportedPathResolver.resolveDirectories(
+            for: supportedApp,
+            appVersion: appVersion,
+            appBundlePath: appBundlePath
+        ).map { resolvedDirectory in
             AvailableDirectory(
                 name: resolvedDirectory.name,
                 path: resolvedDirectory.path,
