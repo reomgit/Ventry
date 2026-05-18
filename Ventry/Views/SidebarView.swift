@@ -99,25 +99,32 @@ struct SidebarView: View {
             // Applications Section
             Section("Applications") {
                 if appState.applications.isEmpty {
-                    VStack {
+                    VStack(alignment: .leading, spacing: 10) {
                         Text("No applications added")
-                            .font(.caption)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundColor(.primary.opacity(0.85))
+
+                        Text("Scan installed apps to quickly organize project folders.")
+                            .font(.footnote)
                             .foregroundColor(.secondary)
-                            .italic()
-                        
+                            .fixedSize(horizontal: false, vertical: true)
+
                         Button {
                             appState.showApplicationSettings()
                         } label: {
-                            HStack {
-                                Image(systemName: "plus")
-                                Text("Scan for Apps")
-                            }
-                            .font(.caption)
-                            .foregroundColor(.accentColor)
+                            Label("Scan for Apps", systemImage: "plus.circle.fill")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(.accentColor)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(Color.accentColor.opacity(0.12))
+                                )
                         }
                         .buttonStyle(.plain)
-                        .padding(.top, 4)
                     }
+                    .padding(.vertical, 6)
                 } else {
                     ForEach(appState.applications) { application in
                         sidebarRowButton(selection: .application(application.id)) {
@@ -140,7 +147,7 @@ struct SidebarView: View {
                             Image(systemName: "gearshape")
                                 .foregroundColor(.secondary)
                             Text("Manage Applications")
-                                .font(.caption)
+                                .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
                     }
@@ -200,8 +207,8 @@ struct SidebarView: View {
     ) -> some View {
         Button(action: action) {
             label()
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
                         .fill(isSelected(selection) ? Color.accentColor.opacity(0.16) : Color.clear)
