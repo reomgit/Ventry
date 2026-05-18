@@ -163,6 +163,7 @@ struct SidebarView: View {
         }
         .navigationTitle("Library")
         .listStyle(SidebarListStyle())
+        .focusEffectDisabled()
         .onKeyPress(.upArrow) {
             return .handled
         }

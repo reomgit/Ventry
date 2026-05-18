@@ -249,6 +249,7 @@ private struct FolderBrowserContentView: View {
         }
         .focusable()
         .focused($isCommandTargetFocused)
+        .focusEffectDisabled()
         .focusedSceneValue(\.folderBrowserCommandHandler, commandHandler)
         .navigationTitle(session.route.parentPageTitle == nil ? session.route.title : "")
         .toolbar {
