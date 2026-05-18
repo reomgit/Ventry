@@ -30,6 +30,7 @@ struct ContentView: View {
                 }
             }
             .focusedSceneValue(\.browserTabCommandHandler, browserTabCommandHandler)
+            .focusEffectDisabled()
             .navigationSplitViewStyle(.balanced)
         }
         .sheet(isPresented: $appState.showingMultipleInstallationsSheet) {
